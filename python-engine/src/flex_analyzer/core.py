@@ -65,13 +65,13 @@ def _create_flex_mask(std_matrix: np.ndarray, score_threshold: float = 0.5) -> n
     """
     N = std_matrix.shape[0]
     flex_mask = std_matrix > score_threshold
-    
+
     # 対角は必ずFalse
     np.fill_diagonal(flex_mask, False)
-    
+
     # 対称性を保証
     flex_mask = np.logical_or(flex_mask, flex_mask.T)
-    
+
     return flex_mask
 
 
@@ -190,13 +190,13 @@ def compute_uniprot_level_flex(
     # === ステップ4: 最終flex_mask（条件A OR 条件B） ===
     # 条件A: global_std > score_threshold
     condition_A = global_std > score_threshold
-    
+
     # 条件B: flex_presence_ratio >= flex_ratio_threshold
     condition_B = flex_presence_matrix >= flex_ratio_threshold
-    
+
     # 最終判定（A OR B）
     global_final_flex_mask = np.logical_or(condition_A, condition_B)
-    
+
     # 対角は必ずFalse
     np.fill_diagonal(global_final_flex_mask, False)
 
@@ -247,3 +247,64 @@ def compute_uniprot_level_flex(
         flex_ratio_threshold=flex_ratio_threshold,
         score_threshold=score_threshold,
     )
+
+
+# src/flex_analyzer/core.py に追記
+
+from typing import Dict, Any, Tuple, List
+
+import numpy as np
+
+from .dsa import compute_dsa_stats, dsa_stats_to_dict
+
+
+def analyze_flex_and_dsa_from_coords(
+    ca_coords: np.ndarray,
+    residue_info: List[Tuple[int, str]],
+) -> Dict[str, Any]:
+    """
+    parser.extract_ca_coords_from_* で得られた Cα 座標と残基情報から、
+    - 既存の Flex 解析（あなたの既存ロジックでやっているもの）
+    - 追加の DSA/UMF 解析 (compute_dsa_stats)
+    を合わせた dict を返すエントリポイントの一例。
+
+    ここでは「DSA 部分」のみ作っているので、
+    もし core.py に既に Flex 用の関数があるなら、
+    その結果に DSA の dict をマージする形で使ってください。
+    """
+
+    if ca_coords.ndim != 3:
+        raise ValueError(f"ca_coords must be (K, N, 3), got {ca_coords.shape}")
+
+    K, N, _ = ca_coords.shape
+    if len(residue_info) != N:
+        raise ValueError(f"len(residue_info)={len(residue_info)} does not match coords N={N}")
+
+    # --- DSA part ---
+    dsa_stats = compute_dsa_stats(ca_coords)
+    dsa_dict = dsa_stats_to_dict(dsa_stats)
+
+    # per-residue 情報を組み立てておく（3D 色付け & テーブル用）
+    per_residue = []
+    for i, (res_seq, resname) in enumerate(residue_info):
+        dsa_score = dsa_dict["per_residue_scores"][i]
+        per_residue.append(
+            {
+                "index": int(res_seq),
+                "resname": resname,
+                "dsa_score": dsa_score,
+            }
+        )
+
+    result: Dict[str, Any] = {
+        "num_structures": int(dsa_dict["num_structures"]),
+        "num_residues": int(dsa_dict["num_residues"]),
+        "umf": dsa_dict["umf"],
+        "dsa_pair_score_mean": dsa_dict["pair_score_mean"],
+        "dsa_pair_score_std": dsa_dict["pair_score_std"],
+        "dsa_main_plot": dsa_dict["main_plot_points"],
+        "per_residue_dsa": per_residue,
+        "cis": dsa_dict["cis"],
+    }
+
+    return result
