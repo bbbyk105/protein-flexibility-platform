@@ -1,65 +1,126 @@
-import Image from "next/image";
+// app/page.tsx
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Upload, Dna, Zap, BarChart3 } from "lucide-react";
 
-export default function Home() {
+export default function HomePage() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
+    <div className="min-h-screen bg-linear-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
+      {/* Hero Section */}
+      <section className="container mx-auto px-4 py-20">
+        <div className="text-center max-w-4xl mx-auto">
+          <h1 className="text-5xl font-bold tracking-tight mb-6 bg-linear-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+            Protein Flexibility Analysis Platform
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+          <p className="text-xl text-slate-600 dark:text-slate-400 mb-8">
+            タンパク質の揺らぎを高速解析。UniProt ID または PDB ファイルから、
+            残基ごとの柔軟性スコアを可視化します。
           </p>
+          <div className="flex gap-4 justify-center">
+            <Link href="/analyze?mode=uniprot">
+              <Button size="lg" className="gap-2">
+                <Dna className="w-5 h-5" />
+                UniProt 解析を開始
+              </Button>
+            </Link>
+            <Link href="/analyze?mode=pdb">
+              <Button size="lg" variant="outline" className="gap-2">
+                <Upload className="w-5 h-5" />
+                PDB アップロード
+              </Button>
+            </Link>
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+      </section>
+
+      {/* Features Section */}
+      <section className="container mx-auto px-4 py-16">
+        <div className="grid md:grid-cols-3 gap-8">
+          <Card className="border-2 hover:border-blue-500 transition-colors">
+            <CardHeader>
+              <Zap className="w-12 h-12 mb-4 text-blue-600" />
+              <CardTitle>高速解析</CardTitle>
+              <CardDescription>
+                NumPy ベクトル化により、数百構造の解析を数秒で完了
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ul className="text-sm text-slate-600 dark:text-slate-400 space-y-2">
+                <li>✓ 自動 PDB 取得</li>
+                <li>✓ 残基ミスマッチ除外</li>
+                <li>✓ 404 エラー自動スキップ</li>
+              </ul>
+            </CardContent>
+          </Card>
+
+          <Card className="border-2 hover:border-purple-500 transition-colors">
+            <CardHeader>
+              <Dna className="w-12 h-12 mb-4 text-purple-600" />
+              <CardTitle>UniProt 統合</CardTitle>
+              <CardDescription>
+                UniProt ID を入力するだけで、全 PDB 構造を自動解析
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ul className="text-sm text-slate-600 dark:text-slate-400 space-y-2">
+                <li>✓ Inactive ID 自動解決</li>
+                <li>✓ 最大 100 構造まで対応</li>
+                <li>✓ 2段階解析アルゴリズム</li>
+              </ul>
+            </CardContent>
+          </Card>
+
+          <Card className="border-2 hover:border-green-500 transition-colors">
+            <CardHeader>
+              <BarChart3 className="w-12 h-12 mb-4 text-green-600" />
+              <CardTitle>3D 可視化</CardTitle>
+              <CardDescription>
+                残基ごとの flex_score をカラーマップで直感的に表示
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ul className="text-sm text-slate-600 dark:text-slate-400 space-y-2">
+                <li>✓ インタラクティブ操作</li>
+                <li>✓ 統計グラフ表示</li>
+                <li>✓ JSON エクスポート</li>
+              </ul>
+            </CardContent>
+          </Card>
         </div>
-      </main>
+      </section>
+
+      {/* CTA Section */}
+      <section className="container mx-auto px-4 py-16 text-center">
+        <Card className="max-w-2xl mx-auto bg-linear-to-r from-blue-50 to-purple-50 dark:from-blue-950 dark:to-purple-950 border-2">
+          <CardHeader>
+            <CardTitle className="text-3xl">今すぐ解析を始める</CardTitle>
+            <CardDescription className="text-lg">
+              UniProt ID または PDB ファイルを用意してください
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex gap-4 justify-center">
+            <Link href="/analyze?mode=uniprot">
+              <Button size="lg" className="gap-2">
+                <Dna className="w-5 h-5" />
+                UniProt で解析
+              </Button>
+            </Link>
+            <Link href="/analyze?mode=pdb">
+              <Button size="lg" variant="secondary" className="gap-2">
+                <Upload className="w-5 h-5" />
+                PDB で解析
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+      </section>
     </div>
   );
 }
