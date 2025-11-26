@@ -1,7 +1,16 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'cdn.rcsb.org',
+        port: '',
+        pathname: '/images/structures/**',
+      },
+    ],
+  },
 };
 
 export default nextConfig;
