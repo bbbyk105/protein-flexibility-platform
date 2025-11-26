@@ -13,6 +13,12 @@ type AnalyzeResponse struct {
 	Message string `json:"message"`
 }
 
+// UniProtAnalyzeRequest はUniProt解析リクエスト
+type UniProtAnalyzeRequest struct {
+	UniProtID     string `json:"uniprot_id" validate:"required"`
+	MaxStructures int    `json:"max_structures,omitempty"` // デフォルト: 20
+}
+
 // ResidueData は残基ごとのデータ（Python models.pyと一致）
 type ResidueData struct {
 	Index         int     `json:"index"`
@@ -32,21 +38,47 @@ type FlexStats struct {
 
 // PairMatrix はペアワイズ行列（Python models.pyと一致）
 type PairMatrix struct {
-	Type   string        `json:"type"`
-	Size   int           `json:"size"`
-	Values [][]float64   `json:"values"`
+	Type     string      `json:"type"`
+	Size     int         `json:"size"`
+	Values   [][]float64 `json:"values,omitempty"`
+	Data     []float64   `json:"data,omitempty"`     // UniProtレベル解析用
+	FlexMask [][]bool    `json:"flex_mask,omitempty"` // UniProtレベル解析用
 }
 
 // AnalysisResult は解析結果全体（Python models.pyと一致）
 type AnalysisResult struct {
-	JobID         string       `json:"job_id"`
-	PDBID         *string      `json:"pdb_id"`
-	ChainID       string       `json:"chain_id"`
-	NumStructures int          `json:"num_structures"`
-	NumResidues   int          `json:"num_residues"`
+	JobID         string        `json:"job_id"`
+	PDBID         *string       `json:"pdb_id"`
+	ChainID       string        `json:"chain_id"`
+	NumStructures int           `json:"num_structures"`
+	NumResidues   int           `json:"num_residues"`
 	Residues      []ResidueData `json:"residues"`
-	FlexStats     FlexStats    `json:"flex_stats"`
-	PairMatrix    PairMatrix   `json:"pair_matrix"`
+	FlexStats     FlexStats     `json:"flex_stats"`
+	PairMatrix    PairMatrix    `json:"pair_matrix"`
+}
+
+// PerStructureResult は各構造の解析結果（UniProtレベル解析用）
+type PerStructureResult struct {
+	PDBID             string      `json:"pdb_id"`
+	ChainID           string      `json:"chain_id"`
+	NumConformations  int         `json:"num_conformations"`
+	FlexStats         FlexStats   `json:"flex_stats"`
+	PairMatrix        PairMatrix  `json:"pair_matrix"`
+}
+
+// UniProtLevelResult はUniProtレベルの解析結果
+type UniProtLevelResult struct {
+	UniProtID              string               `json:"uniprot_id"`
+	NumStructures          int                  `json:"num_structures"`
+	NumConformationsTotal  int                  `json:"num_conformations_total"`
+	NumResidues            int                  `json:"num_residues"`
+	Residues               []ResidueData        `json:"residues"`
+	GlobalFlexStats        FlexStats            `json:"global_flex_stats"`
+	GlobalPairMatrix       PairMatrix           `json:"global_pair_matrix"`
+	PerStructureResults    []PerStructureResult `json:"per_structure_results"`
+	FlexPresenceRatio      []float64            `json:"flex_presence_ratio"`
+	FlexRatioThreshold     float64              `json:"flex_ratio_threshold"`
+	ScoreThreshold         float64              `json:"score_threshold"`
 }
 
 // ErrorResponse はエラーレスポンス

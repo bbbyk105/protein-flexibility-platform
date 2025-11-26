@@ -45,19 +45,22 @@ func main() {
 
 	// ハンドラー初期化
 	analyzeHandler := handlers.NewAnalyzeHandler(analyzerService)
+	uniprotHandler := handlers.NewUniProtAnalyzeHandler(analyzerService)
 	resultsHandler := handlers.NewResultsHandler(analyzerService)
 
 	// ルーティング設定
 	api := app.Group("/api")
 
 	// ヘルスチェック
-	api.Get("/health", resultsHandler.HandleHealthCheck)
+	api.Get("/health", resultsHandler.HandleHealth)
 
 	// 解析エンドポイント
-	api.Post("/analyze", analyzeHandler.HandleAnalyze)
+	api.Post("/analyze", analyzeHandler.HandleAnalyze)           // 単一PDB解析
+	api.Post("/analyze/uniprot", uniprotHandler.HandleUniProtAnalyze) // UniProt解析
 
 	// 結果取得エンドポイント
-	api.Get("/results/:job_id", resultsHandler.HandleGetResult)
+	api.Get("/results/:job_id", resultsHandler.HandleGetResult)        // 単一PDB結果
+	api.Get("/results/uniprot/:job_id", resultsHandler.HandleGetUniProtResult) // UniProt結果
 	api.Get("/status/:job_id", resultsHandler.HandleGetStatus)
 
 	// ルートパス
@@ -66,10 +69,12 @@ func main() {
 			"service": "Protein Flexibility Analysis API",
 			"version": "1.0.0",
 			"endpoints": fiber.Map{
-				"health":  "GET /api/health",
-				"analyze": "POST /api/analyze (multipart/form-data: pdb_file, chain_id, pdb_id)",
-				"status":  "GET /api/status/:job_id",
-				"results": "GET /api/results/:job_id",
+				"health":          "GET /api/health",
+				"analyze_pdb":     "POST /api/analyze (multipart/form-data: pdb_file, chain_id, pdb_id)",
+				"analyze_uniprot": "POST /api/analyze/uniprot (JSON: {uniprot_id, max_structures})",
+				"status":          "GET /api/status/:job_id",
+				"results_pdb":     "GET /api/results/:job_id",
+				"results_uniprot": "GET /api/results/uniprot/:job_id",
 			},
 		})
 	})
@@ -78,8 +83,14 @@ func main() {
 	log.Printf("🚀 Server starting on port %s", port)
 	log.Printf("📁 Storage directory: %s", storageDir)
 	log.Printf("🔬 Python flex-analyze command must be available in PATH")
-	log.Printf("📊 Access API documentation at http://localhost:%s", port)
-	
+	log.Printf("📊 API Endpoints:")
+	log.Printf("   - POST /api/analyze (PDB upload)")
+	log.Printf("   - POST /api/analyze/uniprot (UniProt auto-analysis)")
+	log.Printf("   - GET  /api/status/:job_id")
+	log.Printf("   - GET  /api/results/:job_id")
+	log.Printf("   - GET  /api/results/uniprot/:job_id")
+	log.Printf("📚 Access API documentation at http://localhost:%s", port)
+
 	if err := app.Listen(":" + port); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}

@@ -25,26 +25,34 @@ func NewAnalyzerService(storageDir string) *AnalyzerService {
 
 // AnalyzePDB はPDBファイルを解析
 func (s *AnalyzerService) AnalyzePDB(jobID, pdbPath, chainID, pdbID string) error {
-	// 結果ファイルパス
-	resultPath := filepath.Join(s.StorageDir, "results", fmt.Sprintf("%s.json", jobID))
+	// 結果ファイルパス（絶対パスに変換）
+	absStorageDir, _ := filepath.Abs(s.StorageDir)
+	resultPath := filepath.Join(absStorageDir, "results", fmt.Sprintf("%s.json", jobID))
 
 	// ジョブステータスファイル作成
-	statusPath := filepath.Join(s.StorageDir, "results", fmt.Sprintf("%s.status.json", jobID))
+	statusPath := filepath.Join(absStorageDir, "results", fmt.Sprintf("%s.status.json", jobID))
 	s.updateJobStatus(statusPath, jobID, "processing", "Analysis in progress", 10)
+
+	// PDBパスも絶対パスに変換
+	absPdbPath, _ := filepath.Abs(pdbPath)
 
 	// flex-analyzeコマンド実行
 	args := []string{
-		"-i", pdbPath,
+		"-m", "flex_analyzer.cli",
+		"-i", absPdbPath,
 		"-c", chainID,
 		"-o", resultPath,
 		"--job-id", jobID,
 	}
-	
+
 	if pdbID != "" {
 		args = append(args, "--pdb-id", pdbID)
 	}
 
-	cmd := exec.Command("flex-analyze", args...)
+	cmd := exec.Command("/opt/anaconda3/bin/python", args...)
+	
+	// 作業ディレクトリを python-engine に設定
+	cmd.Dir = "../python-engine"
 
 	// 標準出力・エラー出力を取得
 	output, err := cmd.CombinedOutput()
@@ -56,6 +64,45 @@ func (s *AnalyzerService) AnalyzePDB(jobID, pdbPath, chainID, pdbID string) erro
 
 	// 成功
 	s.updateJobStatus(statusPath, jobID, "completed", "Analysis completed successfully", 100)
+	return nil
+}
+
+// AnalyzeUniProt はUniProt IDを使って自動解析
+func (s *AnalyzerService) AnalyzeUniProt(jobID, uniprotID string, maxStructures int) error {
+	// 結果ファイルパス（絶対パスに変換）
+	absStorageDir, _ := filepath.Abs(s.StorageDir)
+	resultPath := filepath.Join(absStorageDir, "results", fmt.Sprintf("%s.json", jobID))
+
+	// ジョブステータスファイル作成
+	statusPath := filepath.Join(absStorageDir, "results", fmt.Sprintf("%s.status.json", jobID))
+	s.updateJobStatus(statusPath, jobID, "processing", "UniProt analysis in progress", 10)
+
+	// flex-analyzeコマンド実行（UniProtモード）
+	args := []string{
+		"-m", "flex_analyzer.cli",
+		"--uniprot", uniprotID,
+		"--max-structures", fmt.Sprintf("%d", maxStructures),
+		"-o", resultPath,
+	}
+
+	cmd := exec.Command("/opt/anaconda3/bin/python", args...)
+	
+	// 作業ディレクトリを python-engine に設定
+	cmd.Dir = "../python-engine"
+
+	// 進捗更新
+	s.updateJobStatus(statusPath, jobID, "processing", "Downloading PDB structures...", 30)
+
+	// 標準出力・エラー出力を取得
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		errorMsg := fmt.Sprintf("UniProt analysis failed: %v\nOutput: %s", err, string(output))
+		s.updateJobStatus(statusPath, jobID, "failed", errorMsg, 0)
+		return fmt.Errorf(errorMsg)
+	}
+
+	// 成功
+	s.updateJobStatus(statusPath, jobID, "completed", "UniProt analysis completed successfully", 100)
 	return nil
 }
 
@@ -78,6 +125,30 @@ func (s *AnalyzerService) GetResult(jobID string) (*models.AnalysisResult, error
 	var result models.AnalysisResult
 	if err := json.Unmarshal(data, &result); err != nil {
 		return nil, fmt.Errorf("failed to parse result JSON: %v", err)
+	}
+
+	return &result, nil
+}
+
+// GetUniProtResult はUniProt解析結果を取得
+func (s *AnalyzerService) GetUniProtResult(jobID string) (*models.UniProtLevelResult, error) {
+	resultPath := filepath.Join(s.StorageDir, "results", fmt.Sprintf("%s.json", jobID))
+
+	// ファイルが存在するか確認
+	if _, err := os.Stat(resultPath); os.IsNotExist(err) {
+		return nil, fmt.Errorf("result not found for job_id: %s", jobID)
+	}
+
+	// JSONファイル読み込み
+	data, err := os.ReadFile(resultPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read result file: %v", err)
+	}
+
+	// JSONパース
+	var result models.UniProtLevelResult
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, fmt.Errorf("failed to parse UniProt result JSON: %v", err)
 	}
 
 	return &result, nil
@@ -110,7 +181,7 @@ func (s *AnalyzerService) GetJobStatus(jobID string) (*models.JobStatus, error) 
 // updateJobStatus はジョブステータスを更新
 func (s *AnalyzerService) updateJobStatus(statusPath, jobID, status, message string, progress int) error {
 	now := time.Now().Format(time.RFC3339)
-	
+
 	jobStatus := models.JobStatus{
 		JobID:     jobID,
 		Status:    status,
@@ -144,7 +215,7 @@ func (s *AnalyzerService) updateJobStatus(statusPath, jobID, status, message str
 // SaveUploadedFile はアップロードされたファイルを保存
 func (s *AnalyzerService) SaveUploadedFile(fileData []byte, filename string) (string, error) {
 	uploadDir := filepath.Join(s.StorageDir, "uploads")
-	
+
 	// ディレクトリ作成（存在しない場合）
 	if err := os.MkdirAll(uploadDir, 0755); err != nil {
 		return "", fmt.Errorf("failed to create upload directory: %v", err)

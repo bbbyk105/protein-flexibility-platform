@@ -18,18 +18,38 @@ func NewResultsHandler(analyzerService *services.AnalyzerService) *ResultsHandle
 	}
 }
 
-// HandleGetResult は解析結果を取得
+// HandleGetResult は解析結果を取得（単一PDB用）
 func (h *ResultsHandler) HandleGetResult(c *fiber.Ctx) error {
 	jobID := c.Params("job_id")
 	if jobID == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(models.ErrorResponse{
 			Error:   "job_id_required",
-			Message: "Job ID is required",
+			Message: "job_id is required",
 		})
 	}
 
-	// 結果取得
 	result, err := h.analyzerService.GetResult(jobID)
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(models.ErrorResponse{
+			Error:   "result_not_found",
+			Message: err.Error(),
+		})
+	}
+
+	return c.JSON(result)
+}
+
+// HandleGetUniProtResult はUniProt解析結果を取得
+func (h *ResultsHandler) HandleGetUniProtResult(c *fiber.Ctx) error {
+	jobID := c.Params("job_id")
+	if jobID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(models.ErrorResponse{
+			Error:   "job_id_required",
+			Message: "job_id is required",
+		})
+	}
+
+	result, err := h.analyzerService.GetUniProtResult(jobID)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(models.ErrorResponse{
 			Error:   "result_not_found",
@@ -46,11 +66,10 @@ func (h *ResultsHandler) HandleGetStatus(c *fiber.Ctx) error {
 	if jobID == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(models.ErrorResponse{
 			Error:   "job_id_required",
-			Message: "Job ID is required",
+			Message: "job_id is required",
 		})
 	}
 
-	// ステータス取得
 	status, err := h.analyzerService.GetJobStatus(jobID)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(models.ErrorResponse{
@@ -62,8 +81,8 @@ func (h *ResultsHandler) HandleGetStatus(c *fiber.Ctx) error {
 	return c.JSON(status)
 }
 
-// HandleHealthCheck はヘルスチェック
-func (h *ResultsHandler) HandleHealthCheck(c *fiber.Ctx) error {
+// HandleHealth はヘルスチェック
+func (h *ResultsHandler) HandleHealth(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{
 		"status":  "ok",
 		"service": "protein-flexibility-api",
