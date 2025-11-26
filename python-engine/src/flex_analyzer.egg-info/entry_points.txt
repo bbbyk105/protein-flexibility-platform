@@ -1,2 +1,0 @@
-[console_scripts]
-flex-analyze = flex_analyzer.cli:main
