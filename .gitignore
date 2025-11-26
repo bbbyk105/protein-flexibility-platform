@@ -1,0 +1,77 @@
+############################
+# Global
+############################
+.DS_Store
+*.log
+*.tmp
+*.swp
+*.swo
+
+############################
+# VSCode
+############################
+.vscode/
+.idea/
+
+############################
+# Python (python-engine)
+############################
+python-engine/.venv/
+python-engine/__pycache__/
+python-engine/**/*.pyc
+python-engine/.pytest_cache/
+python-engine/.mypy_cache/
+python-engine/.ruff_cache/
+python-engine/.coverage
+python-engine/coverage.xml
+python-engine/htmlcov/
+
+# Virtual environment artifacts
+venv/
+env/
+
+############################
+# Python build / dist
+############################
+python-engine/build/
+python-engine/dist/
+python-engine/*.egg-info/
+
+############################
+# Tests
+############################
+python-engine/tests/__pycache__/
+python-engine/test_data/*.pdb
+python-engine/test_data/*.cif
+python-engine/test_data/*.json
+
+############################
+# Go (go-api)
+############################
+go-api/bin/
+go-api/pkg/
+go-api/tmp/
+go-api/*.exe
+go-api/*.out
+
+# Go modules cache (not needed in repo)
+go-api/go.sum
+
+############################
+# Output (analysis results)
+############################
+output/*.json
+!output/mock_result.json   # keep mock if needed
+
+############################
+# Logs / temp
+############################
+*.out
+*.err
+*.pid
+*.cache
+
+############################
+# Jupyter / notebook
+############################
+*.ipynb_checkpoints
