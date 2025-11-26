@@ -75,3 +75,12 @@ output/*.json
 # Jupyter / notebook
 ############################
 *.ipynb_checkpoints
+
+# Python engine cache
+python-engine/data/
+python-engine/output/
+python-engine/.venv/
+
+# PDB files
+*.pdb
+
