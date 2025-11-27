@@ -53,6 +53,7 @@ go-api/pkg/
 go-api/tmp/
 go-api/*.exe
 go-api/*.out
+go-api/storage/results
 
 # Go modules cache (not needed in repo)
 go-api/go.sum
@@ -83,4 +84,5 @@ python-engine/.venv/
 
 # PDB files
 *.pdb
+
 
