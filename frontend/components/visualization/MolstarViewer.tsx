@@ -20,15 +20,17 @@ export default function MolstarViewer({
   chainId,
   residues,
   colorBy,
+  highlightedResidue,
 }: MolstarViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const pluginRef = useRef<unknown>(null);
+  const pluginRef = useRef<any>(null);
+  const structureRef = useRef<any>(null);
   const isInitializedRef = useRef(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // 初期化
   useEffect(() => {
-    // 既に初期化済みの場合はスキップ（Strict Mode 対策）
     if (isInitializedRef.current || !containerRef.current) return;
 
     const initMolstar = async () => {
@@ -37,14 +39,12 @@ export default function MolstarViewer({
         setError(null);
         isInitializedRef.current = true;
 
-        // 動的インポート
         const [{ createPluginUI }, { DefaultPluginUISpec }, { renderReact18 }] = await Promise.all([
           import('molstar/lib/mol-plugin-ui'),
           import('molstar/lib/mol-plugin-ui/spec'),
           import('molstar/lib/mol-plugin-ui/react18'),
         ]);
         
-        // プラグイン初期化
         const plugin = await createPluginUI({
           target: containerRef.current as HTMLElement,
           render: renderReact18,
@@ -61,7 +61,6 @@ export default function MolstarViewer({
 
         pluginRef.current = plugin;
 
-        // PDB構造をロード
         const pdbUrl = `https://files.rcsb.org/download/${pdbId}.pdb`;
         const data = await plugin.builders.data.download(
           { url: pdbUrl, isBinary: false },
@@ -71,15 +70,14 @@ export default function MolstarViewer({
         const trajectory = await plugin.builders.structure.parseTrajectory(data, 'pdb');
         const model = await plugin.builders.structure.createModel(trajectory);
         const structure = await plugin.builders.structure.createStructure(model);
+        
+        structureRef.current = structure;
 
-        // 基本的なカートゥーン表現を追加
         await plugin.builders.structure.representation.addRepresentation(structure, {
           type: 'cartoon',
         });
 
-        // ビューをフィット
         plugin.canvas3d?.requestCameraReset();
-
         setIsLoading(false);
       } catch (err) {
         console.error('Mol* initialization error:', err);
@@ -92,18 +90,69 @@ export default function MolstarViewer({
     initMolstar();
 
     return () => {
-      if (pluginRef.current && typeof (pluginRef.current as { dispose?: () => void }).dispose === 'function') {
-        (pluginRef.current as { dispose: () => void }).dispose();
+      if (pluginRef.current?.dispose) {
+        pluginRef.current.dispose();
         pluginRef.current = null;
+        structureRef.current = null;
         isInitializedRef.current = false;
       }
     };
   }, [pdbId]);
 
+  // ハイライト機能
+  useEffect(() => {
+    if (!pluginRef.current || !structureRef.current || highlightedResidue === null) return;
+
+    const highlightResidue = async () => {
+      try {
+        const plugin = pluginRef.current;
+        const residue = residues.find(r => r.index === highlightedResidue);
+        if (!residue) return;
+
+        // Script を使って残基を選択
+        const { Script } = await import('molstar/lib/mol-script/script');
+        const { MolScriptBuilder: MS } = await import('molstar/lib/mol-script/language/builder');
+        const { StructureSelection } = await import('molstar/lib/mol-model/structure');
+
+        // 残基番号で選択クエリを作成
+        const data = plugin.managers.structure.hierarchy.current.structures[0]?.cell.obj?.data;
+        if (!data) return;
+
+        const selection = Script.getStructureSelection(
+          Q => Q.struct.generator.atomGroups({
+            'residue-test': Q.core.rel.eq([
+              Q.struct.atomProperty.macromolecular.label_seq_id(),
+              residue.residue_number
+            ]),
+            'chain-test': Q.core.rel.eq([
+              Q.struct.atomProperty.macromolecular.label_asym_id(),
+              chainId
+            ])
+          }),
+          data
+        );
+
+        const loci = StructureSelection.toLociWithSourceUnits(selection);
+
+        // ハイライト表示
+        plugin.managers.interactivity.lociHighlights.highlightOnly({ loci });
+
+        // カメラをフォーカス
+        plugin.managers.camera.focusLoci(loci);
+
+      } catch (err) {
+        console.error('Highlight error:', err);
+      }
+    };
+
+    highlightResidue();
+  }, [highlightedResidue, residues, chainId]);
+
   const handleReset = () => {
-    const plugin = pluginRef.current as { canvas3d?: { requestCameraReset: () => void } };
-    if (plugin?.canvas3d) {
-      plugin.canvas3d.requestCameraReset();
+    if (pluginRef.current?.canvas3d) {
+      pluginRef.current.canvas3d.requestCameraReset();
+      // ハイライトをクリア
+      pluginRef.current.managers.interactivity.lociHighlights.clearHighlights();
     }
   };
 
@@ -143,6 +192,11 @@ export default function MolstarViewer({
                 PDB ID: {pdbId} が見つからない可能性があります
               </p>
             </div>
+          </div>
+        )}
+        {highlightedResidue !== null && (
+          <div className="absolute top-4 left-4 z-10 bg-blue-600 text-white px-3 py-1 rounded-lg text-sm font-semibold shadow-lg">
+            残基 {residues.find(r => r.index === highlightedResidue)?.residue_number} をハイライト中
           </div>
         )}
         <div 
