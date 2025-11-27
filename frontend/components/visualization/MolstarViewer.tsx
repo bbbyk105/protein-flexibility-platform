@@ -1,10 +1,17 @@
-'use client';
+/* eslint-disable @typescript-eslint/no-explicit-any */
+"use client";
 
-import { useEffect, useRef, useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Loader2, RotateCcw, Maximize2 } from 'lucide-react';
-import { ResidueData, ColorMode } from '@/types';
+import { useEffect, useRef, useState } from "react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Loader2, RotateCcw, Maximize2 } from "lucide-react";
+import { ResidueData, ColorMode } from "@/types";
 
 interface MolstarViewerProps {
   pdbId: string;
@@ -39,12 +46,13 @@ export default function MolstarViewer({
         setError(null);
         isInitializedRef.current = true;
 
-        const [{ createPluginUI }, { DefaultPluginUISpec }, { renderReact18 }] = await Promise.all([
-          import('molstar/lib/mol-plugin-ui'),
-          import('molstar/lib/mol-plugin-ui/spec'),
-          import('molstar/lib/mol-plugin-ui/react18'),
-        ]);
-        
+        const [{ createPluginUI }, { DefaultPluginUISpec }, { renderReact18 }] =
+          await Promise.all([
+            import("molstar/lib/mol-plugin-ui"),
+            import("molstar/lib/mol-plugin-ui/spec"),
+            import("molstar/lib/mol-plugin-ui/react18"),
+          ]);
+
         const plugin = await createPluginUI({
           target: containerRef.current as HTMLElement,
           render: renderReact18,
@@ -67,21 +75,29 @@ export default function MolstarViewer({
           { state: { isGhost: false } }
         );
 
-        const trajectory = await plugin.builders.structure.parseTrajectory(data, 'pdb');
+        const trajectory = await plugin.builders.structure.parseTrajectory(
+          data,
+          "pdb"
+        );
         const model = await plugin.builders.structure.createModel(trajectory);
-        const structure = await plugin.builders.structure.createStructure(model);
-        
+        const structure = await plugin.builders.structure.createStructure(
+          model
+        );
+
         structureRef.current = structure;
 
-        await plugin.builders.structure.representation.addRepresentation(structure, {
-          type: 'cartoon',
-        });
+        await plugin.builders.structure.representation.addRepresentation(
+          structure,
+          {
+            type: "cartoon",
+          }
+        );
 
         plugin.canvas3d?.requestCameraReset();
         setIsLoading(false);
       } catch (err) {
-        console.error('Mol* initialization error:', err);
-        setError('3D構造の読み込みに失敗しました');
+        console.error("Mol* initialization error:", err);
+        setError("3D構造の読み込みに失敗しました");
         setIsLoading(false);
         isInitializedRef.current = false;
       }
@@ -101,34 +117,43 @@ export default function MolstarViewer({
 
   // ハイライト機能
   useEffect(() => {
-    if (!pluginRef.current || !structureRef.current || highlightedResidue === null) return;
+    if (
+      !pluginRef.current ||
+      !structureRef.current ||
+      highlightedResidue === null
+    )
+      return;
 
     const highlightResidue = async () => {
       try {
         const plugin = pluginRef.current;
-        const residue = residues.find(r => r.index === highlightedResidue);
+        const residue = residues.find((r) => r.index === highlightedResidue);
         if (!residue) return;
 
         // Script を使って残基を選択
-        const { Script } = await import('molstar/lib/mol-script/script');
-        const { MolScriptBuilder: MS } = await import('molstar/lib/mol-script/language/builder');
-        const { StructureSelection } = await import('molstar/lib/mol-model/structure');
+        const { Script } = await import("molstar/lib/mol-script/script");
+        const { StructureSelection } = await import(
+          "molstar/lib/mol-model/structure"
+        );
 
         // 残基番号で選択クエリを作成
-        const data = plugin.managers.structure.hierarchy.current.structures[0]?.cell.obj?.data;
+        const data =
+          plugin.managers.structure.hierarchy.current.structures[0]?.cell.obj
+            ?.data;
         if (!data) return;
 
         const selection = Script.getStructureSelection(
-          Q => Q.struct.generator.atomGroups({
-            'residue-test': Q.core.rel.eq([
-              Q.struct.atomProperty.macromolecular.label_seq_id(),
-              residue.residue_number
-            ]),
-            'chain-test': Q.core.rel.eq([
-              Q.struct.atomProperty.macromolecular.label_asym_id(),
-              chainId
-            ])
-          }),
+          (Q) =>
+            Q.struct.generator.atomGroups({
+              "residue-test": Q.core.rel.eq([
+                Q.struct.atomProperty.macromolecular.label_seq_id(),
+                residue.residue_number,
+              ]),
+              "chain-test": Q.core.rel.eq([
+                Q.struct.atomProperty.macromolecular.label_asym_id(),
+                chainId,
+              ]),
+            }),
           data
         );
 
@@ -139,9 +164,8 @@ export default function MolstarViewer({
 
         // カメラをフォーカス
         plugin.managers.camera.focusLoci(loci);
-
       } catch (err) {
-        console.error('Highlight error:', err);
+        console.error("Highlight error:", err);
       }
     };
 
@@ -162,7 +186,12 @@ export default function MolstarViewer({
         <CardTitle className="flex items-center justify-between">
           <span>3D 構造表示 (Mol* Viewer)</span>
           <div className="flex gap-2">
-            <Button size="sm" variant="outline" onClick={handleReset} disabled={isLoading}>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleReset}
+              disabled={isLoading}
+            >
               <RotateCcw className="w-4 h-4" />
             </Button>
             <Button size="sm" variant="outline" disabled={isLoading}>
@@ -179,7 +208,9 @@ export default function MolstarViewer({
           <div className="absolute inset-0 flex items-center justify-center bg-white/80 dark:bg-slate-900/80 z-10 rounded-lg">
             <div className="text-center">
               <Loader2 className="w-8 h-8 animate-spin mx-auto mb-2" />
-              <p className="text-sm text-slate-600 dark:text-slate-400">構造を読み込み中...</p>
+              <p className="text-sm text-slate-600 dark:text-slate-400">
+                構造を読み込み中...
+              </p>
               <p className="text-xs text-slate-500 mt-1">{pdbId}.pdb</p>
             </div>
           </div>
@@ -196,13 +227,18 @@ export default function MolstarViewer({
         )}
         {highlightedResidue !== null && (
           <div className="absolute top-4 left-4 z-10 bg-blue-600 text-white px-3 py-1 rounded-lg text-sm font-semibold shadow-lg">
-            残基 {residues.find(r => r.index === highlightedResidue)?.residue_number} をハイライト中
+            残基{" "}
+            {
+              residues.find((r) => r.index === highlightedResidue)
+                ?.residue_number
+            }{" "}
+            をハイライト中
           </div>
         )}
-        <div 
-          ref={containerRef} 
+        <div
+          ref={containerRef}
           className="w-full h-[600px] border rounded-lg overflow-hidden bg-slate-50 dark:bg-slate-900"
-          style={{ position: 'relative' }}
+          style={{ position: "relative" }}
         />
       </CardContent>
     </Card>
