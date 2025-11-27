@@ -1,0 +1,25 @@
+/* Mol* Viewer 専用スタイル */
+
+.msp-plugin {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.msp-plugin canvas {
+  outline: none;
+}
+
+/* Mol* のコントロールパネルを非表示 */
+.msp-layout-expanded {
+  display: none;
+}
+
+/* ビューアの背景 */
+.msp-viewport {
+  background-color: #f8fafc;
+}
+
+.dark .msp-viewport {
+  background-color: #0f172a;
+}

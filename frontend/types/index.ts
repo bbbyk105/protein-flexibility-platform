@@ -30,6 +30,22 @@ export interface FlexStats {
   median: number;
 }
 
+export interface PairMatrix {
+  type: string;
+  size: number;
+  values?: number[][];
+  data?: number[];
+  flex_mask?: boolean[][];
+}
+
+export interface PerStructureResult {
+  pdb_id: string;
+  chain_id: string;
+  num_conformations: number;
+  flex_stats: FlexStats;
+  pair_matrix: PairMatrix;
+}
+
 export interface UniProtLevelResult {
   uniprot_id: string;
   num_structures: number;
@@ -37,5 +53,21 @@ export interface UniProtLevelResult {
   num_residues: number;
   residues: ResidueData[];
   global_flex_stats: FlexStats;
+  global_pair_matrix?: PairMatrix;
+  per_structure_results?: PerStructureResult[];
   flex_presence_ratio?: number[];
+  flex_ratio_threshold?: number;
+  score_threshold?: number;
+}
+
+// 3D Viewer用の型
+export type ColorMode = 'flex' | 'dsa' | 'bfactor';
+
+export interface StructureViewerProps {
+  pdbId: string;
+  chainId: string;
+  residues: ResidueData[];
+  colorBy: ColorMode;
+  onResidueClick?: (residueIndex: number) => void;
+  highlightedResidue?: number | null;
 }
