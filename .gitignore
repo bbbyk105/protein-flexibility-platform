@@ -86,6 +86,10 @@ python-engine/.venv/
 
 # PDB files
 *.pdb
+storage
+
+go-api/atom_coord
+go-api/pdb_files
 
 
 

@@ -1,105 +1,62 @@
-// cmd/server/main.go
 package main
 
 import (
+	"flag"
 	"log"
 	"os"
-	"path/filepath"
 
-	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/logger"
-	"github.com/gofiber/fiber/v2/middleware/recover"
-	"protein-flex-api/internal/handlers"
-	"protein-flex-api/internal/middleware"
-	"protein-flex-api/internal/services"
+	"github.com/gin-contrib/cors"
+	"github.com/gin-gonic/gin"
+	"github.com/yourusername/flex-api/internal/handlers"
+	"github.com/yourusername/flex-api/internal/services"
 )
 
 func main() {
-	// 環境変数取得
-	port := getEnv("PORT", "3001")
-	storageDir := getEnv("STORAGE_DIR", "./storage")
+	// コマンドラインフラグ
+	port := flag.String("port", "8080", "Server port")
+	storageDir := flag.String("storage", "./storage", "Storage directory for jobs")
+	pythonBin := flag.String("python", "python3", "Python binary path")
+	flag.Parse()
 
 	// ストレージディレクトリ作成
-	if err := os.MkdirAll(filepath.Join(storageDir, "uploads"), 0755); err != nil {
-		log.Fatalf("Failed to create uploads directory: %v", err)
+	if err := os.MkdirAll(*storageDir, 0755); err != nil {
+		log.Fatalf("Failed to create storage directory: %v", err)
 	}
-	if err := os.MkdirAll(filepath.Join(storageDir, "results"), 0755); err != nil {
-		log.Fatalf("Failed to create results directory: %v", err)
-	}
-
-	// Fiberアプリ作成
-	app := fiber.New(fiber.Config{
-		BodyLimit: 100 * 1024 * 1024, // 100MB (PDBファイル用)
-		AppName:   "Protein Flexibility API v1.0.0",
-	})
-
-	// ミドルウェア設定
-	app.Use(logger.New(logger.Config{
-		Format: "[${time}] ${status} - ${method} ${path} (${latency})\n",
-	}))
-	app.Use(recover.New())
-	app.Use(middleware.SetupCORS())
 
 	// サービス初期化
-	analyzerService := services.NewAnalyzerService(storageDir)
+	jobService := services.NewJobService(*storageDir, *pythonBin)
 
 	// ハンドラー初期化
-	analyzeHandler := handlers.NewAnalyzeHandler(analyzerService)
-	uniprotHandler := handlers.NewUniProtAnalyzeHandler(analyzerService)
-	resultsHandler := handlers.NewResultsHandler(analyzerService)
+	h := handlers.NewHandler(jobService)
 
-	// ルーティング設定
-	api := app.Group("/api")
+	// Ginルーター設定
+	router := gin.Default()
 
-	// ヘルスチェック
-	api.Get("/health", resultsHandler.HandleHealth)
+	// CORS設定
+	config := cors.DefaultConfig()
+	config.AllowOrigins = []string{"http://localhost:3000", "http://localhost:3001"}
+	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
+	config.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "Authorization"}
+	config.AllowCredentials = true
+	router.Use(cors.New(config))
 
-	// 解析エンドポイント
-	api.Post("/analyze", analyzeHandler.HandleAnalyze)           // 単一PDB解析
-	api.Post("/analyze/uniprot", uniprotHandler.HandleUniProtAnalyze) // UniProt解析
+	// ルート設定
+	router.GET("/health", h.HealthCheck)
 
-	// 結果取得エンドポイント
-	api.Get("/results/:job_id", resultsHandler.HandleGetResult)        // 単一PDB結果
-	api.Get("/results/uniprot/:job_id", resultsHandler.HandleGetUniProtResult) // UniProt結果
-	api.Get("/status/:job_id", resultsHandler.HandleGetStatus)
-
-	// ルートパス
-	app.Get("/", func(c *fiber.Ctx) error {
-		return c.JSON(fiber.Map{
-			"service": "Protein Flexibility Analysis API",
-			"version": "1.0.0",
-			"endpoints": fiber.Map{
-				"health":          "GET /api/health",
-				"analyze_pdb":     "POST /api/analyze (multipart/form-data: pdb_file, chain_id, pdb_id)",
-				"analyze_uniprot": "POST /api/analyze/uniprot (JSON: {uniprot_id, max_structures})",
-				"status":          "GET /api/status/:job_id",
-				"results_pdb":     "GET /api/results/:job_id",
-				"results_uniprot": "GET /api/results/uniprot/:job_id",
-			},
-		})
-	})
+	api := router.Group("/api/dsa")
+	{
+		api.POST("/analyze", h.CreateAnalysis)
+		api.GET("/status/:job_id", h.GetStatus)
+		api.GET("/result/:job_id", h.GetResult)
+	}
 
 	// サーバー起動
-	log.Printf("🚀 Server starting on port %s", port)
-	log.Printf("📁 Storage directory: %s", storageDir)
-	log.Printf("🔬 Python flex-analyze command must be available in PATH")
-	log.Printf("📊 API Endpoints:")
-	log.Printf("   - POST /api/analyze (PDB upload)")
-	log.Printf("   - POST /api/analyze/uniprot (UniProt auto-analysis)")
-	log.Printf("   - GET  /api/status/:job_id")
-	log.Printf("   - GET  /api/results/:job_id")
-	log.Printf("   - GET  /api/results/uniprot/:job_id")
-	log.Printf("📚 Access API documentation at http://localhost:%s", port)
-
-	if err := app.Listen(":" + port); err != nil {
+	addr := ":" + *port
+	log.Printf("Server starting on %s", addr)
+	log.Printf("Storage directory: %s", *storageDir)
+	log.Printf("Python binary: %s", *pythonBin)
+	
+	if err := router.Run(addr); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}
-}
-
-// getEnv は環境変数を取得（デフォルト値あり）
-func getEnv(key, defaultValue string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return defaultValue
 }
