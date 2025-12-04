@@ -249,10 +249,10 @@ def compute_uniprot_level_flex(
     )
 
 
-# src/flex_analyzer/core.py に追記
+# ==== DSA (nb 準拠) 解析ヘルパー ====================================
 
-from typing import Dict, Any, Tuple, List
-
+from typing import Dict, Any, List, Tuple
+import math
 import numpy as np
 
 from .dsa import compute_dsa_stats, dsa_stats_to_dict
@@ -263,46 +263,74 @@ def analyze_flex_and_dsa_from_coords(
     residue_info: List[Tuple[int, str]],
 ) -> Dict[str, Any]:
     """
-    parser.extract_ca_coords_from_* で得られた Cα 座標と残基情報から、
-    - 既存の Flex 解析（あなたの既存ロジックでやっているもの）
-    - 追加の DSA/UMF 解析 (compute_dsa_stats)
-    を合わせた dict を返すエントリポイントの一例。
+    DSA_Cis_*.ipynb と同じロジックで DSA を計算し、
+    Go / Next からそのまま扱える dict を返すヘルパー。
 
-    ここでは「DSA 部分」のみ作っているので、
-    もし core.py に既に Flex 用の関数があるなら、
-    その結果に DSA の dict をマージする形で使ってください。
+    Parameters
+    ----------
+    ca_coords : np.ndarray
+        shape = (num_structures, num_residues, 3) の Cα 座標.
+    residue_info : list[tuple[int, str]]
+        (res_seq_number, resname) のタプル列（長さ num_residues）
+
+    Returns
+    -------
+    dict
+        JSON にそのまま載せられる DSA 結果。
     """
+    if ca_coords.ndim != 3 or ca_coords.shape[2] != 3:
+        raise ValueError(
+            f"ca_coords must be (num_structures, num_residues, 3), " f"got {ca_coords.shape}"
+        )
 
-    if ca_coords.ndim != 3:
-        raise ValueError(f"ca_coords must be (K, N, 3), got {ca_coords.shape}")
+    num_structures, num_residues, _ = ca_coords.shape
 
-    K, N, _ = ca_coords.shape
-    if len(residue_info) != N:
-        raise ValueError(f"len(residue_info)={len(residue_info)} does not match coords N={N}")
+    if len(residue_info) != num_residues:
+        raise ValueError(
+            f"len(residue_info)={len(residue_info)} " f"does not match num_residues={num_residues}"
+        )
 
-    # --- DSA part ---
-    dsa_stats = compute_dsa_stats(ca_coords)
-    dsa_dict = dsa_stats_to_dict(dsa_stats)
+    # nb 準拠の DSA 統計を計算
+    stats = compute_dsa_stats(ca_coords)
+    dsa_dict = dsa_stats_to_dict(stats)
 
-    # per-residue 情報を組み立てておく（3D 色付け & テーブル用）
-    per_residue = []
+    # --- JSON で安全に扱えるように NaN を null に変換しておく ---
+
+    # ヒートマップ (N×N) : NaN → null
+    raw_heatmap = dsa_dict["score_heatmap"]
+    safe_heatmap: List[List[float | None]] = []
+    for row in raw_heatmap:
+        safe_row = []
+        for x in row:
+            v = float(x)
+            safe_row.append(v if math.isfinite(v) else None)
+        safe_heatmap.append(safe_row)
+
+    # per-residue スコア : NaN → null
+    per_scores_raw = dsa_dict["per_residue_scores"]
+
+    # per-residue 情報を組み立て（Mol* カラーリング / テーブル用）
+    per_residue: List[Dict[str, Any]] = []
     for i, (res_seq, resname) in enumerate(residue_info):
-        dsa_score = dsa_dict["per_residue_scores"][i]
+        v = float(per_scores_raw[i])
+        score = v if math.isfinite(v) else None
         per_residue.append(
             {
                 "index": int(res_seq),
                 "resname": resname,
-                "dsa_score": dsa_score,
+                "dsa_score": score,
             }
         )
 
+    # Go 側の DSAResult struct に合わせたキー名でまとめる
     result: Dict[str, Any] = {
         "num_structures": int(dsa_dict["num_structures"]),
         "num_residues": int(dsa_dict["num_residues"]),
-        "umf": dsa_dict["umf"],
-        "dsa_pair_score_mean": dsa_dict["pair_score_mean"],
-        "dsa_pair_score_std": dsa_dict["pair_score_std"],
+        "umf": float(dsa_dict["umf"]),
+        "dsa_pair_score_mean": float(dsa_dict["pair_score_mean"]),
+        "dsa_pair_score_std": float(dsa_dict["pair_score_std"]),
         "dsa_main_plot": dsa_dict["main_plot_points"],
+        "dsa_heatmap": safe_heatmap,
         "per_residue_dsa": per_residue,
         "cis": dsa_dict["cis"],
     }

@@ -97,26 +97,38 @@ def _run_uniprot_mode(uniprot_id: str, max_structures: int, output_path: str):
         )
         raise click.Abort()
 
-    click.echo(f"🧬 UniProt Analysis Mode")
+    click.echo("🧬 UniProt Analysis Mode")
     click.echo(f"   UniProt ID: {uniprot_id}")
     click.echo(f"   Max structures: {max_structures}")
     click.echo()
 
     try:
-        # パイプライン実行
+        # パイプライン実行（ここで DSA 付き JSON が output_dir に書き出される）
+        output_file = Path(output_path)
+        output_dir = output_file.parent
+
         result = run_uniprot_pipeline(
             uniprot_id=uniprot_id,
             max_structures=max_structures,
-            output_dir=Path(output_path).parent,
+            output_dir=output_dir,
         )
 
-        # 指定されたパスにも保存
-        output_file = Path(output_path)
-        output_file.parent.mkdir(parents=True, exist_ok=True)
-        output_file.write_text(
-            result.model_dump_json(indent=2),
-            encoding="utf-8",
-        )
+        # パイプラインが書いた JSON ファイルのパス
+        # run_uniprot_pipeline 内で: f"{sset.uniprot_id_input}_uniprot_result.json"
+        pipeline_json_path = output_dir / f"{uniprot_id}_uniprot_result.json"
+
+        # 最終的な出力パスにも同じ内容を書き出す
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        if pipeline_json_path.exists():
+            data = pipeline_json_path.read_text(encoding="utf-8")
+            output_file.write_text(data, encoding="utf-8")
+        else:
+            # フォールバック: もし何かの理由で JSON が無ければ、従来通り flex だけ吐く
+            output_file.write_text(
+                result.model_dump_json(indent=2),
+                encoding="utf-8",
+            )
 
         click.echo(f"\n✅ Analysis complete! Results saved to {output_path}")
 
