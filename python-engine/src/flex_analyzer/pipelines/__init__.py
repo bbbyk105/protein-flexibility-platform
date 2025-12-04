@@ -1,3 +1,5 @@
-from .uniprot_pipeline import run_uniprot_pipeline
+"""DSA 解析パイプライン"""
 
-__all__ = ["run_uniprot_pipeline"]
+from .dsa_pipeline import run_dsa_pipeline
+
+__all__ = ["run_dsa_pipeline"]

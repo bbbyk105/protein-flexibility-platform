@@ -4,36 +4,60 @@ import numpy as np
 from typing import Tuple
 
 
-def calculate_distance_matrix(coords: np.ndarray) -> np.ndarray:
-    """
-    3D座標から距離行列を計算（ベクトル化版）
+def convert_three_to_one(three_letter: str) -> str:
+    """3文字アミノ酸コードを1文字に変換"""
+    code_map = {
+        "ALA": "A",
+        "CYS": "C",
+        "ASP": "D",
+        "GLU": "E",
+        "PHE": "F",
+        "GLY": "G",
+        "HIS": "H",
+        "ILE": "I",
+        "LYS": "K",
+        "LEU": "L",
+        "MET": "M",
+        "ASN": "N",
+        "PRO": "P",
+        "GLN": "Q",
+        "ARG": "R",
+        "SER": "S",
+        "THR": "T",
+        "VAL": "V",
+        "TRP": "W",
+        "TYR": "Y",
+        "SEC": "U",
+        "HYP": "O",
+    }
+    return code_map.get(three_letter.upper(), "X")
 
-    Args:
-        coords: 形状 (N, 3) の座標配列
 
-    Returns:
-        形状 (N, N) の距離行列
-    """
-    # coords: (N, 3)
-    # diff: (N, 1, 3) - (1, N, 3) = (N, N, 3)
-    diff = coords[:, np.newaxis, :] - coords[np.newaxis, :, :]
-    # ユークリッド距離: sqrt(sum(diff^2))
-    distances = np.sqrt(np.sum(diff**2, axis=-1))
-    return distances
-
-
-def safe_divide(
-    numerator: np.ndarray, denominator: np.ndarray, epsilon: float = 1e-8
-) -> np.ndarray:
-    """
-    ゼロ割りを安全に処理する除算
-
-    Args:
-        numerator: 分子
-        denominator: 分母
-        epsilon: ゼロ割り回避用の微小値
-
-    Returns:
-        numerator / (denominator + epsilon)
-    """
-    return numerator / (denominator + epsilon)
+def convert_one_to_three(one_letter: str) -> str:
+    """1文字アミノ酸コードを3文字に変換"""
+    code_map = {
+        "A": "ALA",
+        "C": "CYS",
+        "D": "ASP",
+        "E": "GLU",
+        "F": "PHE",
+        "G": "GLY",
+        "H": "HIS",
+        "I": "ILE",
+        "K": "LYS",
+        "L": "LEU",
+        "M": "MET",
+        "N": "ASN",
+        "P": "PRO",
+        "Q": "GLN",
+        "R": "ARG",
+        "S": "SER",
+        "T": "THR",
+        "V": "VAL",
+        "W": "TRP",
+        "Y": "TYR",
+        "U": "SEC",
+        "O": "HYP",
+        "X": "UNK",
+    }
+    return code_map.get(one_letter.upper(), "UNK")

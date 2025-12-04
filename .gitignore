@@ -44,6 +44,8 @@ python-engine/tests/__pycache__/
 python-engine/test_data/*.pdb
 python-engine/test_data/*.cif
 python-engine/test_data/*.json
+python-engine/atom_coord
+python-engine/pdb_files
 
 ############################
 # Go (go-api)
@@ -84,5 +86,7 @@ python-engine/.venv/
 
 # PDB files
 *.pdb
+
+
 
 

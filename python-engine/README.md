@@ -1,249 +1,134 @@
-# Flex Analyzer - タンパク質揺らぎ解析エンジン
+# Flex Analyzer - DSA Engine
 
-複数構造の Cα 座標から DSA スコアと可変性指標を高速計算する Python パッケージ。
-
-## 特徴
-
-- ✅ **単一 PDB 解析**: 複数モデルを含む PDB ファイルから揺らぎを計算
-- ✅ **UniProt 自動解析**: UniProt ID から自動的に PDB 構造を取得・解析
-- ✅ **高速計算**: NumPy ベクトル化により高速処理
-- ✅ **JSON 出力**: Web 可視化に最適な形式で出力
+タンパク質の揺らぎ解析エンジン（Notebook DSA_Cis_250317.ipynb の完全再現）
 
 ## インストール
 
 ```bash
 cd python-engine
-pip install -e ".[dev]"
+pip install -e .
 ```
 
-## 使い方
+## 使用方法
 
-### 1. UniProt 自動解析（推奨）
-
-UniProt ID を指定するだけで、自動的に PDB 構造を取得・解析します。
+### 基本的な使い方
 
 ```bash
-# ユビキチン（P62988）を解析
-flex-analyze --uniprot P62988 --max-structures 20 -o results/ubiquitin.json
-
-# 最大構造数を制限
-flex-analyze --uniprot P12345 --max-structures 10 -o results/result.json
-
-# 閾値をカスタマイズ
-flex-analyze --uniprot P62988 \
-  --max-structures 20 \
-  --flex-ratio-threshold 0.6 \
-  --score-threshold 1.5 \
-  -o results/result.json
+flex-analyze --uniprot P62988 --output result.json
 ```
 
-**特徴:**
-
-- Inactive な UniProt ID も自動解決（DEMERGED 対応）
-- 404 の PDB を自動スキップ
-- 残基数ミスマッチの構造を自動除外
-- フルレングス構造のみを使用
-
-### 2. 単一 PDB 解析
+### カスタムパラメータ
 
 ```bash
-# 単一ファイル（複数MODELを含む）
-flex-analyze -i data/protein.pdb -c A -o results/result.json --job-id job1
-
-# 複数ファイル
-flex-analyze -i struct1.pdb -i struct2.pdb -i struct3.pdb -c A -o results/result.json
+flex-analyze \
+  --uniprot P62988 \
+  --max-structures 30 \
+  --seq-ratio 0.85 \
+  --cis-threshold 3.5 \
+  --method "X-ray diffraction" \
+  --output result.json
 ```
 
-### 3. モックデータでのテスト
+## パラメータ
 
-```bash
-flex-analyze --mock --output results/mock_result.json --job-id mock_test
+- `--uniprot`: UniProt ID（必須）
+- `--max-structures`: 解析する最大 PDB 構造数（デフォルト: 20）
+- `--seq-ratio`: 配列アライメント閾値（デフォルト: 0.9）
+- `--cis-threshold`: Cis 判定の距離閾値 Å（デフォルト: 3.8）
+- `--method`: PDB 取得時のメソッドフィルタ（デフォルト: "X-ray diffraction"）
+- `--output`, `-o`: 出力 JSON ファイルパス（必須）
+- `--pdb-dir`: PDB ファイル保存ディレクトリ（デフォルト: pdb_files）
+- `--verbose/--no-verbose`: 詳細ログの表示（デフォルト: True）
 
-# 構造数・残基数をカスタマイズ
-flex-analyze --mock --mock-structures 50 --mock-residues 100 -o results/mock.json
-```
-
-## Python API での使用
-
-### UniProt 解析パイプライン
-
-```python
-from flex_analyzer.pipelines.uniprot_pipeline import run_uniprot_pipeline
-
-# P62988（ユビキチン）を解析
-result = run_uniprot_pipeline(
-    uniprot_id="P62988",
-    max_structures=20,
-)
-
-print(f"構造数: {result.num_structures}")
-print(f"総コンフォメーション数: {result.num_conformations_total}")
-print(f"グローバル Flex Stats: {result.global_flex_stats}")
-```
-
-### 低レベル API
-
-```python
-from flex_analyzer.core import compute_dsa_and_flex_fast
-import numpy as np
-
-# 座標データ（M構造 x N残基 x 3次元）
-coords = np.random.randn(10, 50, 3)
-
-# 解析実行
-residue_flex, residue_dsa, pair_matrix = compute_dsa_and_flex_fast(coords)
-
-print(f"残基ごとの flex_score: {residue_flex}")
-```
-
-## 出力 JSON 形式
-
-### 単一 PDB 解析
+## 出力 JSON スキーマ
 
 ```json
 {
-  "job_id": "example",
-  "pdb_id": "1UBQ",
-  "chain_id": "A",
-  "num_structures": 10,
-  "num_residues": 76,
-  "residues": [
+  "uniprot_id": "P62988",
+  "num_structures": 18,
+  "num_residues": 150,
+  "pdb_ids": ["1ABC", "2XYZ", ...],
+  "excluded_pdbs": ["3BAD"],
+  "seq_ratio": 0.9,
+  "method": "X-ray diffraction",
+  "umf": 45.67,
+  "pair_score_mean": 48.23,
+  "pair_score_std": 12.45,
+  "pair_scores": [
+    {
+      "i": 1,
+      "j": 2,
+      "residue_pair": "ALA-1, GLY-2",
+      "distance_mean": 3.85,
+      "distance_std": 0.12,
+      "score": 32.08
+    },
+    ...
+  ],
+  "per_residue_scores": [
     {
       "index": 0,
       "residue_number": 1,
-      "residue_name": "MET",
-      "flex_score": 1.234,
-      "dsa_score": 0.567
-    }
+      "residue_name": "ALA",
+      "score": 42.15
+    },
+    ...
   ],
-  "flex_stats": {
-    "min": 0.123,
-    "max": 3.456,
-    "mean": 0.789,
-    "median": 0.654
+  "heatmap": {
+    "size": 150,
+    "values": [[...], ...]
   },
-  "pair_matrix": {
-    "type": "flex",
-    "data": [0.1, 0.2, ...],
-    "size": 76
+  "cis_info": {
+    "cis_dist_mean": 2.98,
+    "cis_dist_std": 0.15,
+    "cis_score_mean": 25.67,
+    "cis_num": 5,
+    "mix": 12,
+    "cis_pairs": ["45, 46", "78, 79"],
+    "threshold": 3.8
   }
 }
 ```
 
-### UniProt レベル解析
+## モジュール構成
 
-```json
-{
-  "uniprot_id": "P62987",
-  "num_structures": 7,
-  "num_conformations_total": 402,
-  "num_residues": 76,
-  "residues": [...],
-  "global_flex_stats": {...},
-  "global_pair_matrix": {...},
-  "per_structure_results": [
-    {
-      "pdb_id": "2LJ5",
-      "chain_id": "A",
-      "num_conformations": 200,
-      "flex_stats": {...}
-    }
-  ],
-  "flex_presence_ratio": [...],
-  "flex_ratio_threshold": 0.5,
-  "score_threshold": 1.0
-}
+```
+src/flex_analyzer/
+├── __init__.py
+├── cli.py                 # CLI エントリーポイント
+├── models.py              # Pydantic モデル
+├── utils.py               # ユーティリティ
+├── uniprot_data.py        # UniProt データ取得
+├── cif_data.py            # mmCIF 処理
+├── distance.py            # 距離計算（calculat）
+├── score.py               # DSA Score 計算
+├── cis.py                 # Cis 検出
+├── heatmap.py             # ヒートマップ生成
+├── per_residue.py         # Per-residue スコア
+├── sequence.py            # 配列トリミング
+└── pipelines/
+    ├── __init__.py
+    └── dsa_pipeline.py    # 統合パイプライン
 ```
 
-## テストの実行
+## 特徴
+
+- ✅ Notebook DSA_Cis_250317.ipynb のロジックを完全再現
+- ✅ NumPy ベクトル化による高速化
+- ✅ 変異判定（normal / substitution / chimera / delins）対応
+- ✅ Cis ペプチド結合の検出
+- ✅ UMF (Unified Mobility Factor) 計算
+- ✅ ヒートマップ生成
+- ✅ Per-residue スコア（3D 可視化用）
+
+## 開発
+
+テスト実行:
 
 ```bash
-# 全テスト実行
-pytest tests/ -v
-
-# 特定のテスト
-pytest tests/test_core.py -v
-pytest tests/test_accuracy.py -v
-
-# UniProt パイプラインテスト
-python test_uniprot_complete.py
+pytest tests/
 ```
-
-## プロジェクト構造
-
-```
-python-engine/
-├── src/flex_analyzer/
-│   ├── cli.py              # CLIエントリーポイント
-│   ├── core.py             # コア解析アルゴリズム
-│   ├── models.py           # データモデル
-│   ├── parser.py           # PDB/mmCIF パーサー
-│   ├── data_sources/
-│   │   ├── uniprot.py      # UniProt API連携
-│   │   └── __init__.py
-│   └── pipelines/
-│       ├── uniprot_pipeline.py  # UniProt解析パイプライン
-│       └── __init__.py
-├── tests/                  # テストコード
-├── data/                   # ダウンロード済みPDB
-└── output/                 # 解析結果JSON
-```
-
-## 技術仕様
-
-- **言語**: Python 3.12+
-- **主要ライブラリ**:
-  - NumPy 1.26.0 (高速計算)
-  - Biopython 1.83 (PDB 解析)
-  - Pydantic 2.5.0 (データ検証)
-  - Click 8.1.0 (CLI)
-  - Requests 2.31.0 (API 通信)
 
 ## ライセンス
 
-MIT License
-
-## 開発者向け
-
-### 開発環境セットアップ
-
-```bash
-pip install -e ".[dev]"
-pytest tests/ -v
-```
-
-### 新しい機能の追加
-
-1. `src/flex_analyzer/` に機能を実装
-2. `tests/` にテストを追加
-3. `README.md` に使用例を追加
-4. プルリクエストを作成
-
-## トラブルシューティング
-
-### UniProt ID が見つからない
-
-```bash
-# Inactive ID の場合、自動的に Active ID へリダイレクトされます
-flex-analyze --uniprot P62988 -o result.json
-# → P62987 へ自動解決
-```
-
-### PDB ダウンロードエラー
-
-```bash
-# 404 の PDB は自動的にスキップされます
-# 残基数が異なる PDB も自動除外されます
-```
-
-### メモリ不足
-
-```bash
-# 構造数を制限してください
-flex-analyze --uniprot P12345 --max-structures 10 -o result.json
-```
-
-## サポート
-
-- GitHub Issues: https://github.com/bbbyk105/protein-flexibility-platform/issues
-- ドキュメント: [coming soon]
+Research use only
