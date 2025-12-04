@@ -1,42 +1,26 @@
-// app/page.tsx
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Upload, Dna, Zap, BarChart3 } from "lucide-react";
+import Link from 'next/link';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Upload, Dna, Zap, BarChart3 } from 'lucide-react';
 
 export default function HomePage() {
   return (
-    <div className="min-h-screen bg-linear-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
       {/* Hero Section */}
       <section className="container mx-auto px-4 py-20">
         <div className="text-center max-w-4xl mx-auto">
-          <h1 className="text-5xl font-bold tracking-tight mb-6 bg-linear-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+          <h1 className="text-5xl font-bold tracking-tight mb-6 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
             Protein Flexibility Analysis Platform
           </h1>
           <p className="text-xl text-slate-600 dark:text-slate-400 mb-8">
-            タンパク質の揺らぎを高速解析。UniProt ID または PDB ファイルから、
-            残基ごとの柔軟性スコアを可視化します。
+            タンパク質の揺らぎを高速解析。UniProt ID から残基ごとの柔軟性スコアを可視化します。
           </p>
-          <div className="flex gap-4 justify-center">
-            <Link href="/analyze?mode=uniprot">
-              <Button size="lg" className="gap-2">
-                <Dna className="w-5 h-5" />
-                UniProt 解析を開始
-              </Button>
-            </Link>
-            <Link href="/analyze?mode=pdb">
-              <Button size="lg" variant="outline" className="gap-2">
-                <Upload className="w-5 h-5" />
-                PDB アップロード
-              </Button>
-            </Link>
-          </div>
+          <Link href="/analyze">
+            <Button size="lg" className="gap-2">
+              <Dna className="w-5 h-5" />
+              解析を開始
+            </Button>
+          </Link>
         </div>
       </section>
 
@@ -72,7 +56,7 @@ export default function HomePage() {
               <ul className="text-sm text-slate-600 dark:text-slate-400 space-y-2">
                 <li>✓ Inactive ID 自動解決</li>
                 <li>✓ 最大 100 構造まで対応</li>
-                <li>✓ 2段階解析アルゴリズム</li>
+                <li>✓ DSA・UMF 統合解析</li>
               </ul>
             </CardContent>
           </Card>
@@ -82,14 +66,14 @@ export default function HomePage() {
               <BarChart3 className="w-12 h-12 mb-4 text-green-600" />
               <CardTitle>3D 可視化</CardTitle>
               <CardDescription>
-                残基ごとの flex_score をカラーマップで直感的に表示
+                残基ごとの flex_score を Mol* Viewer で直感的に表示
               </CardDescription>
             </CardHeader>
             <CardContent>
               <ul className="text-sm text-slate-600 dark:text-slate-400 space-y-2">
                 <li>✓ インタラクティブ操作</li>
-                <li>✓ 統計グラフ表示</li>
-                <li>✓ JSON エクスポート</li>
+                <li>✓ リアルタイムハイライト</li>
+                <li>✓ 統計グラフ連動</li>
               </ul>
             </CardContent>
           </Card>
@@ -98,24 +82,18 @@ export default function HomePage() {
 
       {/* CTA Section */}
       <section className="container mx-auto px-4 py-16 text-center">
-        <Card className="max-w-2xl mx-auto bg-linear-to-r from-blue-50 to-purple-50 dark:from-blue-950 dark:to-purple-950 border-2">
+        <Card className="max-w-2xl mx-auto bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950 dark:to-purple-950 border-2">
           <CardHeader>
             <CardTitle className="text-3xl">今すぐ解析を始める</CardTitle>
             <CardDescription className="text-lg">
-              UniProt ID または PDB ファイルを用意してください
+              UniProt ID を用意してください
             </CardDescription>
           </CardHeader>
-          <CardContent className="flex gap-4 justify-center">
-            <Link href="/analyze?mode=uniprot">
+          <CardContent>
+            <Link href="/analyze">
               <Button size="lg" className="gap-2">
                 <Dna className="w-5 h-5" />
-                UniProt で解析
-              </Button>
-            </Link>
-            <Link href="/analyze?mode=pdb">
-              <Button size="lg" variant="secondary" className="gap-2">
-                <Upload className="w-5 h-5" />
-                PDB で解析
+                解析ページへ
               </Button>
             </Link>
           </CardContent>

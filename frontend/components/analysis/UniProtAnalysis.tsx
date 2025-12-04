@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -20,6 +20,12 @@ export default function UniProtAnalysis() {
   const [jobStatus, setJobStatus] = useState<JobStatus | null>(null);
   const [result, setResult] = useState<UniProtLevelResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  
+  // 推定進捗用
+  const [displayProgress, setDisplayProgress] = useState(0);
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const startTimeRef = useRef<number>(0);
 
   const handleAnalyze = async () => {
     if (!uniprotId.trim()) {
@@ -31,36 +37,72 @@ export default function UniProtAnalysis() {
     setIsAnalyzing(true);
     setJobStatus(null);
     setResult(null);
+    setDisplayProgress(0);
+    startTimeRef.current = Date.now();
 
     try {
       // 解析開始
       const response = await analyzeUniProt(uniprotId, maxStructures);
       setJobId(response.job_id);
 
+      // 推定進捗バーのアニメーション開始
+      progressIntervalRef.current = setInterval(() => {
+        setDisplayProgress((prev) => {
+          const elapsed = (Date.now() - startTimeRef.current) / 1000; // 経過秒数
+          
+          // 時間経過に基づいて進捗を計算
+          // 0-30秒: 0-30%
+          // 30-60秒: 30-60%
+          // 60-90秒: 60-80%
+          // 90秒以降: 80-95%（完了まで）
+          let estimated = 0;
+          if (elapsed < 30) {
+            estimated = elapsed; // 0-30%
+          } else if (elapsed < 60) {
+            estimated = 30 + (elapsed - 30); // 30-60%
+          } else if (elapsed < 90) {
+            estimated = 60 + (elapsed - 60) * 0.67; // 60-80%
+          } else {
+            estimated = 80 + Math.min((elapsed - 90) * 0.15, 15); // 80-95%
+          }
+          
+          return Math.min(Math.floor(estimated), 95);
+        });
+      }, 1000); // 1秒ごとに更新
+
       // ポーリング開始
-      const pollInterval = setInterval(async () => {
+      pollIntervalRef.current = setInterval(async () => {
         try {
           const status = await getJobStatus(response.job_id);
           setJobStatus(status);
 
           if (status.status === 'completed') {
-            clearInterval(pollInterval);
+            // 完了時は100%に設定
+            setDisplayProgress(100);
+            
+            // インターバルをクリア
+            if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+            if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+
             // 結果取得
             const resultData = await getUniProtResult(response.job_id);
             setResult(resultData);
             setIsAnalyzing(false);
           } else if (status.status === 'failed') {
-            clearInterval(pollInterval);
+            if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+            if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
             setError(status.message || '解析に失敗しました');
             setIsAnalyzing(false);
           }
         } catch (err) {
           console.error('Status polling error:', err);
         }
-      }, 2000);
+      }, 2000); // 2秒ごとにポーリング
 
+      // 5分でタイムアウト
       setTimeout(() => {
-        clearInterval(pollInterval);
+        if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+        if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
         if (isAnalyzing) {
           setError('解析がタイムアウトしました');
           setIsAnalyzing(false);
@@ -69,8 +111,17 @@ export default function UniProtAnalysis() {
     } catch (err: any) {
       setError(err.response?.data?.message || '解析の開始に失敗しました');
       setIsAnalyzing(false);
+      if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
     }
   };
+
+  // クリーンアップ
+  useEffect(() => {
+    return () => {
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+      if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+    };
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -141,11 +192,17 @@ export default function UniProtAnalysis() {
       </Card>
 
       {jobStatus && (
-        <AnalysisProgress jobStatus={jobStatus} jobId={jobId || ''} />
+        <AnalysisProgress 
+          jobStatus={{
+            ...jobStatus,
+            progress: displayProgress // 時間ベースの推定進捗
+          }} 
+          jobId={jobId || ''} 
+        />
       )}
 
       {result && (
-        <ResultDisplay result={result} type="uniprot" />
+        <ResultDisplay result={result} />
       )}
     </div>
   );
