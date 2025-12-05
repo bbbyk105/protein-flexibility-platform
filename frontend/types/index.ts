@@ -8,7 +8,7 @@ export interface AnalyzeResponse {
 
 export interface JobStatus {
   job_id: string;
-  status: 'pending' | 'processing' | 'completed' | 'failed';
+  status: "pending" | "processing" | "completed" | "failed";
   message?: string;
   progress?: number;
   created_at: string;
@@ -19,7 +19,6 @@ export interface ResidueData {
   index: number;
   residue_number: number;
   residue_name: string;
-  flex_score: number;
   dsa_score: number;
 }
 
@@ -61,7 +60,7 @@ export interface UniProtLevelResult {
 }
 
 // 3D Viewer用の型
-export type ColorMode = 'flex' | 'dsa' | 'bfactor';
+export type ColorMode = "flex" | "dsa" | "bfactor";
 
 export interface StructureViewerProps {
   pdbId: string;

@@ -1,61 +1,59 @@
-import axios from "axios";
-import { AnalyzeResponse, JobStatus, UniProtLevelResult } from "@/types";
+// frontend/lib/api.ts
+
+import type {
+  AnalysisParams,
+  JobResponse,
+  JobStatus,
+  NotebookDSAResult,
+  ErrorResponse,
+} from "@/types/dsa";
 
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
+  process.env.NEXT_PUBLIC_DSA_API_URL ?? "http://localhost:8080";
 
-const apiClient = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: 300000,
-  headers: {
-    "Content-Type": "application/json",
-  },
-});
-
-export const analyzeUniProt = async (
-  uniprotId: string,
-  maxStructures: number = 20
-): Promise<AnalyzeResponse> => {
-  const response = await apiClient.post("/analyze/uniprot", {
-    uniprot_id: uniprotId,
-    max_structures: maxStructures,
-  });
-  return response.data;
-};
-
-export const analyzePDB = async (
-  file: File,
-  chainId: string = "A",
-  pdbId?: string
-): Promise<AnalyzeResponse> => {
-  const formData = new FormData();
-  formData.append("pdb_file", file);
-  formData.append("chain_id", chainId);
-  if (pdbId) {
-    formData.append("pdb_id", pdbId);
+async function handleResponse<T>(res: Response): Promise<T> {
+  if (!res.ok) {
+    let message = `Request failed with status ${res.status}`;
+    try {
+      const data = (await res.json()) as Partial<ErrorResponse>;
+      if (data.error) {
+        message = data.error;
+      }
+    } catch {
+      // ignore json parse error
+    }
+    throw new Error(message);
   }
+  return (await res.json()) as T;
+}
 
-  const response = await apiClient.post("/analyze", formData, {
+export async function createDSAJob(
+  params: AnalysisParams
+): Promise<JobResponse> {
+  const res = await fetch(`${API_BASE_URL}/api/dsa/analyze`, {
+    method: "POST",
     headers: {
-      "Content-Type": "multipart/form-data",
+      "Content-Type": "application/json",
     },
+    body: JSON.stringify(params),
   });
-  return response.data;
-};
 
-export const getJobStatus = async (jobId: string): Promise<JobStatus> => {
-  const response = await apiClient.get(`/status/${jobId}`);
-  return response.data;
-};
+  return handleResponse<JobResponse>(res);
+}
 
-export const getUniProtResult = async (
+export async function fetchJobStatus(jobId: string): Promise<JobStatus> {
+  const res = await fetch(`${API_BASE_URL}/api/dsa/status/${jobId}`, {
+    method: "GET",
+  });
+  return handleResponse<JobStatus>(res);
+}
+
+export async function fetchJobResult(
   jobId: string
-): Promise<UniProtLevelResult> => {
-  const response = await apiClient.get(`/results/uniprot/${jobId}`);
-  return response.data;
-};
-
-export const checkHealth = async () => {
-  const response = await apiClient.get("/health");
-  return response.data;
-};
+): Promise<NotebookDSAResult | ErrorResponse> {
+  const res = await fetch(`${API_BASE_URL}/api/dsa/result/${jobId}`, {
+    method: "GET",
+  });
+  // 結果 か エラー JSON が返ってくる想定
+  return (await res.json()) as NotebookDSAResult | ErrorResponse;
+}

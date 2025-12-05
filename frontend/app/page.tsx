@@ -1,7 +1,13 @@
-import Link from 'next/link';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Upload, Dna, Zap, BarChart3 } from 'lucide-react';
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Dna, Zap, BarChart3 } from "lucide-react";
 
 export default function HomePage() {
   return (
@@ -13,7 +19,8 @@ export default function HomePage() {
             Protein Flexibility Analysis Platform
           </h1>
           <p className="text-xl text-slate-600 dark:text-slate-400 mb-8">
-            タンパク質の揺らぎを高速解析。UniProt ID から残基ごとの柔軟性スコアを可視化します。
+            タンパク質の揺らぎを高速解析。UniProt ID
+            から残基ごとの柔軟性スコアを可視化します。
           </p>
           <Link href="/analyze">
             <Button size="lg" className="gap-2">
