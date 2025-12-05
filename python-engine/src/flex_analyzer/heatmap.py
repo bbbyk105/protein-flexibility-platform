@@ -1,60 +1,85 @@
-"""ヒートマップ生成モジュール"""
+# heatmap.py
 
-import pandas as pd
-import numpy as np
+from __future__ import annotations
+
+from pathlib import Path
 from typing import List, Optional
+
+import numpy as np
+import pandas as pd
 
 
 def generate_heatmap(score: pd.DataFrame) -> np.ndarray:
     """
-    Score DataFrame から N×N ヒートマップを生成（Notebook の行 1387-1398 を再現）
-
-    ポイント:
-    - 1-based インデックスを 0-based に変換
-    - (i-1, j-1) 位置に score 値を配置
-    - 未定義セルは NaN
-
-    Args:
-        score: getscore の出力
-
-    Returns:
-        N×N numpy array (NaN を含む)
+    Score DataFrame から N×N ヒートマップを生成（Notebook 相当）
     """
-    # 最大インデックスを取得（1-based）
-    last_pair = score.iloc[-1, 0]  # 最後のペア "i, j"
-    indices = last_pair.split(", ")
-    max_index = max(int(indices[0]), int(indices[1]))
+    ij = score.iloc[:, 0].str.split(", ", expand=True).astype(int)
+    ij_arr = ij.to_numpy()
+    n_residues = int(ij_arr.max())
 
-    # N×N 行列を NaN で初期化
-    hm = np.full((max_index, max_index), np.nan, dtype=np.float64)
+    heatmap = np.full((n_residues, n_residues), np.nan, dtype=float)
 
-    # 各ペアの score を配置
-    for _, row in score.iterrows():
-        i_str, j_str = row.iloc[0].split(", ")
-        i = int(i_str) - 1  # 0-based に変換
-        j = int(j_str) - 1
-        score_val = row["score"]
+    if "score" in score.columns:
+        values = score["score"].to_numpy()
+    else:
+        values = score.iloc[:, 4].to_numpy()
 
-        # 対称行列として配置
-        hm[i, j] = score_val
-        hm[j, i] = score_val
+    for (i, j), s in zip(ij_arr, values):
+        i0, j0 = i - 1, j - 1
+        heatmap[i0, j0] = s
+        # 対称にしたければ下も埋める:
+        # heatmap[j0, i0] = s
 
-    return hm
+    return heatmap
 
 
-def heatmap_to_list(hm: np.ndarray) -> List[List[Optional[float]]]:
+def heatmap_to_list(heatmap: np.ndarray) -> List[List[Optional[float]]]:
     """
-    numpy array のヒートマップを JSON 用のリストに変換
-
-    NaN は None に変換
-
-    Args:
-        hm: generate_heatmap の出力
-
-    Returns:
-        2D list (NaN は None)
+    NumPy 配列を JSON 用の 2 次元リストに変換（NaN は None）
     """
-    result = []
-    for row in hm:
-        result.append([None if np.isnan(val) else float(val) for val in row])
+    result: List[List[Optional[float]]] = []
+    for row in heatmap:
+        result.append([None if np.isnan(v) else float(v) for v in row])
     return result
+
+
+def save_heatmap_png(
+    heatmap: np.ndarray,
+    out_path: Path,
+    vmin: float = 20.0,
+    vmax: float = 130.0,
+    title: Optional[str] = None,
+) -> None:
+    """
+    ヒートマップ配列から PNG を保存するヘルパー
+
+    - 20〜130 をクリップ（スライド仕様）
+    - NaN は白抜き
+    """
+    import matplotlib.pyplot as plt  # 遅延 import
+
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    hm_vis = np.where(np.isnan(heatmap), np.nan, np.clip(heatmap, vmin, vmax))
+
+    fig, ax = plt.subplots(figsize=(4, 4), dpi=300)
+    im = ax.imshow(
+        hm_vis,
+        vmin=vmin,
+        vmax=vmax,
+        cmap="rainbow_r",  # Notebook と同じ
+        origin="lower",
+    )
+    ax.set_xticks([])
+    ax.set_yticks([])
+
+    if title:
+        ax.set_title(title)
+
+    cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+    cbar.set_label("Score")
+
+    fig.tight_layout()
+    fig.savefig(out_path, bbox_inches="tight", transparent=True)
+    plt.close(fig)

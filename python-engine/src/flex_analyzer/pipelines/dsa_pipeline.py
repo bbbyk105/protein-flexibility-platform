@@ -16,7 +16,7 @@ from ..sequence import sort_sequence, getcoord
 from ..distance import getdistance2_fast
 from ..score import getscore, compute_umf, compute_pair_statistics
 from ..cis import detect_cis_pairs
-from ..heatmap import generate_heatmap, heatmap_to_list
+from ..heatmap import generate_heatmap, heatmap_to_list, save_heatmap_png
 from ..per_residue import per_residue_scores_fast
 
 
@@ -29,6 +29,7 @@ def run_dsa_pipeline(
     output_dir: Path = Path("output"),
     pdb_dir: Path = Path("pdb_files"),
     verbose: bool = True,
+    heatmap_png_path: Optional[Path] = None,
 ) -> NotebookDSAResult:
     """
     Notebook DSA 解析の完全な再現パイプライン
@@ -237,6 +238,16 @@ def run_dsa_pipeline(
 
     heatmap_array = generate_heatmap(score)
     heatmap_list = heatmap_to_list(heatmap_array)
+
+    # ★ ここで PNG を保存
+    if heatmap_png_path is not None:
+        if verbose:
+            print(f"  Saving heatmap PNG to: {heatmap_png_path}")
+        save_heatmap_png(
+            heatmap_array,
+            Path(heatmap_png_path),
+            title=uniprot_id,
+        )
 
     # Step 10: Per-residue スコア計算
     if verbose:
