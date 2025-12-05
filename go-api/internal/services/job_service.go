@@ -30,11 +30,16 @@ func NewJobService(storageDir, pythonBin string) *JobService {
 	}
 }
 
+// ★ heatmap エンドポイント用：storageDir を公開
+func (s *JobService) StorageDir() string {
+	return s.storageDir
+}
+
 // CreateJob は新しいジョブを作成
 func (s *JobService) CreateJob(params models.AnalysisParams) (*models.JobResponse, error) {
 	// デフォルト値設定
 	if params.MaxStructures <= 0 {
-		params.MaxStructures = 20
+		params.MaxStructures = 5
 	}
 	if params.SeqRatio <= 0 || params.SeqRatio > 1 {
 		params.SeqRatio = 0.9
@@ -48,10 +53,10 @@ func (s *JobService) CreateJob(params models.AnalysisParams) (*models.JobRespons
 
 	// ジョブID生成
 	jobID := uuid.New().String()
-	
+
 	// ジョブディレクトリ作成
 	jobDir := filepath.Join(s.storageDir, jobID)
-	if err := os.MkdirAll(jobDir, 0755); err != nil {
+	if err := os.MkdirAll(jobDir, 0o755); err != nil {
 		return nil, fmt.Errorf("failed to create job directory: %w", err)
 	}
 
@@ -82,7 +87,7 @@ func (s *JobService) CreateJob(params models.AnalysisParams) (*models.JobRespons
 // GetJobStatus はジョブの状態を取得
 func (s *JobService) GetJobStatus(jobID string) (*models.JobStatus, error) {
 	statusPath := filepath.Join(s.storageDir, jobID, "status.json")
-	
+
 	data, err := os.ReadFile(statusPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -131,11 +136,35 @@ func (s *JobService) executeDSAAnalysis(jobID string, params models.AnalysisPara
 	// ステータス更新: processing
 	s.updateJobStatus(jobID, "processing", 0, "Starting analysis...")
 
-	// 出力パス
+	// 出力パス（結果 JSON と heatmap.png は同じ job ディレクトリに置く前提）
 	jobDir := filepath.Join(s.storageDir, jobID)
+	if err := os.MkdirAll(jobDir, 0o755); err != nil {
+		s.updateJobStatus(jobID, "failed", 0, fmt.Sprintf("failed to create job dir: %v", err))
+		return
+	}
+
 	resultPath := filepath.Join(jobDir, "result.json")
 
-	// Python CLIコマンド構築
+	// 絶対パス化（Python 側に cwd 依存しないパスを渡す）
+	absResultPath, err := filepath.Abs(resultPath)
+	if err != nil {
+		s.updateJobStatus(jobID, "failed", 0, fmt.Sprintf("failed to resolve result path: %v", err))
+		return
+	}
+
+	// ================================
+	//  🔴 ここが「Python 実行環境あわせ」の肝
+	// ================================
+	// 1) python バイナリは起動時フラグ -python で /opt/anaconda3/bin/python を渡す
+	// 2) PYTHON_ENGINE_DIR 環境変数に python-engine ディレクトリを設定しておく
+	//    例: export PYTHON_ENGINE_DIR="/Users/xxx/Desktop/protein-flexibility-platform/python-engine"
+	pythonWorkDir := os.Getenv("PYTHON_ENGINE_DIR")
+	if pythonWorkDir == "" {
+		// 一旦カレントのままでも動くようにフォールバック
+		pythonWorkDir, _ = os.Getwd()
+	}
+
+	// Python CLIコマンド構築（手で叩いていたのと同じオプションを揃える）
 	args := []string{
 		"-m", "flex_analyzer.cli",
 		"--uniprot", params.UniProtID,
@@ -143,11 +172,19 @@ func (s *JobService) executeDSAAnalysis(jobID string, params models.AnalysisPara
 		"--seq-ratio", fmt.Sprintf("%.2f", params.SeqRatio),
 		"--cis-threshold", fmt.Sprintf("%.2f", params.CisThreshold),
 		"--method", params.Method,
-		"--output", resultPath,
+		"--output", absResultPath,
+		"--verbose",
 	}
 
 	cmd := exec.Command(s.pythonBin, args...)
-	
+
+	/// cwd と PYTHONPATH を Python 単体実行と揃える
+	cmd.Dir = "/Users/kondoubyakko/Desktop/protein-flexibility-platform/python-engine"
+	env := os.Environ()
+	env = append(env, "PYTHONPATH=./src")
+	cmd.Env = env
+
+
 	// 標準出力/エラー出力をキャプチャ
 	output, err := cmd.CombinedOutput()
 
@@ -155,7 +192,7 @@ func (s *JobService) executeDSAAnalysis(jobID string, params models.AnalysisPara
 		// エラー処理
 		errorMsg := fmt.Sprintf("Python CLI failed: %v\nOutput: %s", err, string(output))
 		s.updateJobStatus(jobID, "failed", 0, errorMsg)
-		
+
 		// エラーファイル保存
 		errorData := models.ErrorResponse{
 			Error: errorMsg,
@@ -164,8 +201,8 @@ func (s *JobService) executeDSAAnalysis(jobID string, params models.AnalysisPara
 			},
 		}
 		errorJSON, _ := json.MarshalIndent(errorData, "", "  ")
-		os.WriteFile(filepath.Join(jobDir, "error.json"), errorJSON, 0644)
-		
+		_ = os.WriteFile(filepath.Join(jobDir, "error.json"), errorJSON, 0o644)
+
 		return
 	}
 
@@ -194,19 +231,19 @@ func (s *JobService) updateJobStatus(jobID, status string, progress int, message
 		jobStatus.CreatedAt = time.Now()
 	}
 
-	s.saveJobStatus(jobID, jobStatus)
+	_ = s.saveJobStatus(jobID, jobStatus)
 }
 
 // saveJobStatus はジョブステータスをファイルに保存
 func (s *JobService) saveJobStatus(jobID string, status models.JobStatus) error {
 	statusPath := filepath.Join(s.storageDir, jobID, "status.json")
-	
+
 	data, err := json.MarshalIndent(status, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal status: %w", err)
 	}
 
-	if err := os.WriteFile(statusPath, data, 0644); err != nil {
+	if err := os.WriteFile(statusPath, data, 0o644); err != nil {
 		return fmt.Errorf("failed to write status: %w", err)
 	}
 

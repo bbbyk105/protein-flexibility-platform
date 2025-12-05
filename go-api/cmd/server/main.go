@@ -48,6 +48,7 @@ func main() {
 		api.POST("/analyze", h.CreateAnalysis)
 		api.GET("/status/:job_id", h.GetStatus)
 		api.GET("/result/:job_id", h.GetResult)
+		api.GET("/jobs/:job_id/heatmap", h.GetHeatmap)
 	}
 
 	// サーバー起動

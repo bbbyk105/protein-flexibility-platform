@@ -2,11 +2,14 @@ package handlers
 
 import (
 	"net/http"
+	"os"
+	"path/filepath"
 
 	"github.com/gin-gonic/gin"
 	"github.com/yourusername/flex-api/internal/models"
 	"github.com/yourusername/flex-api/internal/services"
 )
+
 
 type Handler struct {
 	jobService *services.JobService
@@ -84,4 +87,27 @@ func (h *Handler) HealthCheck(c *gin.Context) {
 		"status": "ok",
 		"time":   gin.H{},
 	})
+}
+
+// GetHeatmap はジョブのヒートマップ PNG を返す
+// GET /api/dsa/jobs/:job_id/heatmap
+func (h *Handler) GetHeatmap(c *gin.Context) {
+	jobID := c.Param("job_id")
+	if jobID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "job_id is required"})
+		return
+	}
+
+	heatmapPath := filepath.Join(h.jobService.StorageDir(), jobID, "heatmap.png")
+
+	if _, err := os.Stat(heatmapPath); err != nil {
+		if os.IsNotExist(err) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "heatmap not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to stat heatmap"})
+		return
+	}
+
+	c.File(heatmapPath)
 }

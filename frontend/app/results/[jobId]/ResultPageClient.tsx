@@ -12,6 +12,7 @@ import type {
   PerResidueScore,
 } from "@/types/dsa";
 import type { ResidueData } from "@/types";
+import { HeatmapImage } from "@/components/visualization/HeatmapImage";
 
 interface ResultPageClientProps {
   jobId: string;
@@ -256,7 +257,7 @@ export default function ResultPageClient({ jobId }: ResultPageClientProps) {
             ヒートマップデータがありません。
           </p>
         ) : (
-          <Heatmap values={result.heatmap?.values ?? []} />
+          <HeatmapImage jobId={jobId} />
         )}
       </section>
     </main>
