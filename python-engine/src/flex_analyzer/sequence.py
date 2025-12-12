@@ -233,22 +233,35 @@ def sort_sequence(
 
 def getcoord(trimsequence: pd.DataFrame, atom_coord_dir: str = "atom_coord/") -> pd.DataFrame:
     """
-    DSA 解析で使用する CA 座標テーブルを構築する。
+    DSA 解析用の CA 座標テーブルを構築（Notebook DSA_Cis_250317.py 完全準拠）
 
-    入力:
-        trimsequence:
-            - 0 列目: UniProt 配列 (列名は UniProt ID)
-            - 1 列目以降: "1A00 A" のような PDB/chain を表す列
+    Notebook の getcoord 関数（行 543-620）を完全再現。
+
+    入力 (trimsequence):
+        - 列0: UniProt 配列（3文字コード）
+            例: ["ALA", "VAL", "LEU", ...]
+            列名: UniProt ID (例: "P69905")
+        - 列1以降: PDB/Chain 名（スペース区切り）
+            例: "1A00 A", "1A01 B", ...
 
     出力 (atomcoord):
-        - 最初の列 "uniprot_residue": UniProt 配列 (3 文字コード)
-        - 以降: 各構造ごとに 4 列のブロック (合計 1 + 4 * n_structures 列)
-            [label_k, x_k, y_k, z_k]
+        - 列0: UniProt 配列（3文字コード）
+            列名: UniProt ID
+        - 列1以降: 各 PDB/Chain ごとに 4 列のブロック
+            [label, x, y, z, label, x, y, z, ...]
+            
+        ★重要な仕様:
+            - label 列: 全行が同じ値（例: "1A00 A"）
+            - pd.concat で Series を追加するため、列名は自動生成
+            - 列へのアクセスは位置ベース（1, 5, 9, 13, ... 列目）
 
-    Example:
-        >>> atomcoord.columns
-        ['uniprot_residue', 'label_1a00_A', 'x_1a00_A', 'y_1a00_A', 'z_1a00_A',
-         'label_1a01_A', 'x_1a01_A', 'y_1a01_A', 'z_1a01_A', ...]
+    例:
+        | P69905 | 1A00 A | 1.234 | 2.345 | 3.456 | 1A01 A | 1.111 | 2.222 | 3.333 |
+        | ALA    | 1A00 A | 1.234 | 2.345 | 3.456 | 1A01 A | 1.111 | 2.222 | 3.333 |
+        | VAL    | 1A00 A | ...   | ...   | ...   | 1A01 A | ...   | ...   | ...   |
+        ↑       ↑                                  ↑
+        UniProt  PDB 1 のブロック                  PDB 2 のブロック
+        列      (label, x, y, z)                  (label, x, y, z)
     """
     atom_coord_base = Path(atom_coord_dir)
     atom_coord_base.mkdir(parents=True, exist_ok=True)
@@ -259,105 +272,106 @@ def getcoord(trimsequence: pd.DataFrame, atom_coord_dir: str = "atom_coord/") ->
             f"列名: {list(trimsequence.columns)}"
         )
 
-    # UniProt 配列 (0 列目)
+    # ========================================================================
+    # Step 1: UniProt 配列（0 列目）を取得
+    # ========================================================================
+    uniprot_col_name = trimsequence.columns[0]
     uniprot_residues = trimsequence.iloc[:, 0].reset_index(drop=True)
     num_residues = len(uniprot_residues)
 
-    # 出力 DataFrame の骨格
-    atomcoord = pd.DataFrame({"uniprot_residue": uniprot_residues})
+    # atomcoord の初期化（UniProt 列のみ）
+    atomcoord = pd.DataFrame({uniprot_col_name: uniprot_residues})
 
-    pdb_chains: List[PDBChain] = []
-
-    # 1 列目以降を PDB/chain 列として解釈
-    for col in trimsequence.columns[1:]:
-        pc = _parse_pdb_chain_column_name(col)
-        if pc is None:
-            print(
-                f"[getcoord] WARNING: 列名 '{col}' から PDB/chain を解釈できなかったためスキップします。"
-            )
-            continue
-        pdb_chains.append(pc)
-
-    if not pdb_chains:
-        raise RuntimeError(
-            "getcoord: 有効な PDB/chain 列名が解釈できませんでした。\n"
-            f"trimsequence.columns = {list(trimsequence.columns)}\n"
-            f"想定フォーマット: '1A00 A', '1bzz B' など"
-        )
-
-    print(f"[getcoord] INFO: {len(pdb_chains)} 構造の座標を読み込みます")
-
+    # ========================================================================
+    # Step 2: 各 PDB/Chain の座標を追加
+    # ========================================================================
     used_structures = 0
     failed_structures = []
 
-    for pc in pdb_chains:
+    # trimsequence の 1 列目以降をループ
+    for col in trimsequence.columns[1:]:
+        # 列名から PDB ID と Chain を解析
+        pc = _parse_pdb_chain_column_name(col)
+        if pc is None:
+            print(f"[getcoord] WARNING: 列名 '{col}' を解析できません。スキップします。")
+            continue
+
+        # ------------------------------------------------------------------------
+        # Step 2-1: 座標ファイルを探す
+        # ------------------------------------------------------------------------
         coord_path = _find_coord_file(pc, atom_coord_base)
         if coord_path is None:
-            print(
-                f"[getcoord] WARNING: {pc.label} の座標ファイルが見つかりません "
-                f"(探索ディレクトリ: {atom_coord_base})"
-            )
+            print(f"[getcoord] WARNING: {pc.label} の座標ファイルが見つかりません")
             failed_structures.append(pc.label)
             continue
 
+        # ------------------------------------------------------------------------
+        # Step 2-2: 座標ファイルを読み込む
+        # ------------------------------------------------------------------------
         try:
             coord_df = _load_coord_table(coord_path)
         except Exception as e:
-            print(f"[getcoord] WARNING: {coord_path.name} の読み込みに失敗: {e}")
+            print(f"[getcoord] WARNING: {coord_path.name} の読み込み失敗: {e}")
             failed_structures.append(pc.label)
             continue
 
-        # x, y, z 列が正しく取得できているか確認
+        # x, y, z 列の存在確認
         if not all(c in coord_df.columns for c in ["x", "y", "z"]):
-            print(
-                f"[getcoord] WARNING: {coord_path.name} に x, y, z 列がありません。スキップします。"
-            )
+            print(f"[getcoord] WARNING: {coord_path.name} に x, y, z 列がありません")
             failed_structures.append(pc.label)
             continue
 
-        # 残基数の整合性チェック
+        # ------------------------------------------------------------------------
+        # Step 2-3: 残基数を trimsequence に合わせる
+        # ------------------------------------------------------------------------
         if len(coord_df) < num_residues:
+            # 足りない場合は NaN で埋める
             pad_len = num_residues - len(coord_df)
-            print(
-                f"[getcoord] INFO: {pc.label} の座標行数({len(coord_df)})が "
-                f"trimsequence の残基数({num_residues})より少ないため、"
-                f"末尾を NaN で埋めます (+{pad_len} 行)"
-            )
-            pad = pd.DataFrame(
-                {
-                    "x": [np.nan] * pad_len,
-                    "y": [np.nan] * pad_len,
-                    "z": [np.nan] * pad_len,
-                }
-            )
+            pad = pd.DataFrame({
+                "x": [np.nan] * pad_len,
+                "y": [np.nan] * pad_len,
+                "z": [np.nan] * pad_len,
+            })
             coord_df = pd.concat([coord_df, pad], axis=0, ignore_index=True)
-
+            
         elif len(coord_df) > num_residues:
-            print(
-                f"[getcoord] INFO: {pc.label} の座標行数({len(coord_df)})が "
-                f"trimsequence の残基数({num_residues})より多いため、"
-                f"先頭 {num_residues} 行のみを使用します"
-            )
+            # 多い場合は切り捨て
             coord_df = coord_df.iloc[:num_residues].reset_index(drop=True)
-
+        
         else:
             coord_df = coord_df.reset_index(drop=True)
 
-        # 4 列ブロック: [label, x, y, z]
+        # ------------------------------------------------------------------------
+        # Step 2-4: Notebook 準拠の 4 列追加
+        # ★★★ ここが最も重要 ★★★
+        # ------------------------------------------------------------------------
+        # Notebook の実装:
+        #   seq = pd.Series([name] * N)
+        #   atomcoordpd = pd.concat([atomcoordpd, seq, coord_x, coord_y, coord_z], axis=1)
+        #
+        # つまり:
+        #   1. label 列: 全行が同じ値の Series
+        #   2. x, y, z 列: 座標値の Series
+        #   3. これらを横方向に concat
+        
         label_series = pd.Series([pc.label] * num_residues)
-
-        block = pd.DataFrame(
-            {
-                f"label_{pc.pdbid}_{pc.chain}": label_series,
-                f"x_{pc.pdbid}_{pc.chain}": coord_df["x"].values,
-                f"y_{pc.pdbid}_{pc.chain}": coord_df["y"].values,
-                f"z_{pc.pdbid}_{pc.chain}": coord_df["z"].values,
-            }
+        x_series = coord_df["x"].reset_index(drop=True)
+        y_series = coord_df["y"].reset_index(drop=True)
+        z_series = coord_df["z"].reset_index(drop=True)
+        
+        # ★重要: pd.concat で Series を 4 つ追加
+        # ignore_index=False で列名を保持（Series の name 属性が列名になる）
+        atomcoord = pd.concat(
+            [atomcoord, label_series, x_series, y_series, z_series],
+            axis=1,
+            ignore_index=False
         )
-
-        atomcoord = pd.concat([atomcoord, block], axis=1)
+        
         used_structures += 1
 
+    # ========================================================================
+    # Step 3: 結果の確認
+    # ========================================================================
     if used_structures == 0:
         raise RuntimeError(
             "getcoord: CA 座標が 1 つも取得できませんでした。\n"
@@ -370,11 +384,28 @@ def getcoord(trimsequence: pd.DataFrame, atom_coord_dir: str = "atom_coord/") ->
         )
 
     print(
-        f"[getcoord] SUCCESS: {used_structures}/{len(pdb_chains)} 構造の座標を取得しました "
-        f"(残基数: {num_residues})"
+        f"[getcoord] SUCCESS: {used_structures}/{len(trimsequence.columns) - 1} "
+        f"構造の座標を取得しました (残基数: {num_residues})"
     )
 
     if failed_structures:
-        print(f"[getcoord] 失敗した構造 ({len(failed_structures)}): {', '.join(failed_structures)}")
+        print(f"[getcoord] 失敗した構造 ({len(failed_structures)}): "
+              f"{', '.join(failed_structures)}")
+
+    # ========================================================================
+    # Step 4: 列構造の検証（デバッグ用）
+    # ========================================================================
+    print(f"[getcoord] DEBUG: atomcoord.shape = {atomcoord.shape}")
+    print(f"[getcoord] DEBUG: atomcoord.columns[:10] = {list(atomcoord.columns[:10])}")
+    
+    # 期待される列数: 1 (UniProt) + 4 * used_structures
+    expected_cols = 1 + (4 * used_structures)
+    actual_cols = len(atomcoord.columns)
+    
+    if actual_cols != expected_cols:
+        print(
+            f"[getcoord] WARNING: 列数が期待と異なります "
+            f"(期待: {expected_cols}, 実際: {actual_cols})"
+        )
 
     return atomcoord

@@ -40,19 +40,42 @@ export default function ResultPageClient({ jobId }: ResultPageClientProps) {
   // -------------------------------
   const fetchResult = useCallback(async () => {
     try {
+      console.log(`[DEBUG] fetchResult - Fetching result for jobId: ${jobId}`);
       const res = await fetch(`http://localhost:8080/api/dsa/result/${jobId}`, {
         cache: "no-store",
       });
 
+      console.log(`[DEBUG] fetchResult - Response status: ${res.status}`);
+      console.log(`[DEBUG] fetchResult - Response ok: ${res.ok}`);
+
       if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
+        // エラーレスポンスの詳細を取得
+        let errorMessage = `HTTP ${res.status}`;
+        try {
+          const errorData = await res.json();
+          console.log(`[DEBUG] fetchResult - Error response:`, errorData);
+          if (errorData.error) {
+            errorMessage = errorData.error;
+          }
+        } catch (e) {
+          console.log(
+            `[DEBUG] fetchResult - Failed to parse error response:`,
+            e
+          );
+        }
+        throw new Error(errorMessage);
       }
 
       const data: NotebookDSAResult = await res.json();
+      console.log(`[DEBUG] fetchResult - Successfully loaded result:`, data);
       setResult(data);
     } catch (e) {
-      console.error(e);
-      setError("結果の取得に失敗しました。時間をおいて再度お試しください。");
+      console.error("[DEBUG] fetchResult - Error:", e);
+      const errorMessage =
+        e instanceof Error ? e.message : "結果の取得に失敗しました。";
+      setError(
+        `結果の取得に失敗しました: ${errorMessage}。時間をおいて再度お試しください。`
+      );
     }
   }, [jobId]);
 
@@ -180,7 +203,7 @@ export default function ResultPageClient({ jobId }: ResultPageClientProps) {
         </p>
       </header>
 
-      {/* 概要カード */}
+      {/* 概要カード - Notebook DSA対応 */}
       <section className="bg-white border rounded-xl shadow-sm px-6 py-5">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">
           解析概要 Overview
@@ -191,16 +214,42 @@ export default function ResultPageClient({ jobId }: ResultPageClientProps) {
             <p className="mt-1 font-medium">{result.uniprot_id}</p>
           </div>
           <div>
-            <p className="text-xs text-gray-500">構造数</p>
+            <p className="text-xs text-gray-500">エントリ数 (Entries)</p>
             <p className="mt-1 font-medium">{result.num_structures}</p>
           </div>
           <div>
-            <p className="text-xs text-gray-500">残基数</p>
+            <p className="text-xs text-gray-500">チェーン数 (Chains)</p>
+            <p className="mt-1 font-medium">
+              {result.num_chains != null
+                ? result.num_chains
+                : result.num_structures}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500">残基数 (Length)</p>
             <p className="mt-1 font-medium">{result.num_residues}</p>
           </div>
           <div>
+            <p className="text-xs text-gray-500">残基カバレッジ (Length%)</p>
+            <p className="mt-1 font-medium">
+              {result.residue_coverage_percent != null
+                ? `${result.residue_coverage_percent.toFixed(1)}%`
+                : "N/A"}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500">分解能 (Resolution)</p>
+            <p className="mt-1 font-mono">
+              {result.top5_resolution_mean != null
+                ? `${result.top5_resolution_mean.toFixed(2)} Å`
+                : "N/A"}
+            </p>
+          </div>
+          <div>
             <p className="text-xs text-gray-500">UMF</p>
-            <p className="mt-1 font-mono">{result.umf.toFixed(4)}</p>
+            <p className="mt-1 font-mono font-semibold text-blue-600">
+              {result.umf.toFixed(1)}
+            </p>
           </div>
           <div>
             <p className="text-xs text-gray-500">ペアスコア平均</p>
@@ -212,14 +261,97 @@ export default function ResultPageClient({ jobId }: ResultPageClientProps) {
             <p className="text-xs text-gray-500">ペアスコア標準偏差</p>
             <p className="mt-1 font-mono">{result.pair_score_std.toFixed(2)}</p>
           </div>
-          <div className="col-span-2 md:col-span-2">
+          <div>
+            <p className="text-xs text-gray-500">Cisペア数</p>
+            <p className="mt-1 font-medium text-purple-600">
+              {result.cis_info?.cis_num ?? 0}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500">Cis/Length(%)</p>
+            <p className="mt-1 font-medium">
+              {result.cis_info?.cis_num != null && result.num_residues > 0
+                ? `${(
+                    (result.cis_info.cis_num / result.num_residues) *
+                    100
+                  ).toFixed(2)}%`
+                : "N/A"}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500">Mix (Cis/Trans混在)</p>
+            <p className="mt-1 font-medium text-orange-600">
+              {result.cis_info?.mix ?? 0}
+            </p>
+          </div>
+          <div className="col-span-2 md:col-span-4">
             <p className="text-xs text-gray-500">使用 PDB ID</p>
-            <p className="mt-1 font-mono text-xs">
-              {result.pdb_ids.join(", ")}
+            <p className="mt-1 font-mono text-xs break-words">
+              {result.pdb_ids.length > 0 ? result.pdb_ids.join(", ") : "N/A"}
             </p>
           </div>
         </div>
       </section>
+
+      {/* Cis解析結果カード */}
+      {result.cis_info && (
+        <section className="bg-white border rounded-xl shadow-sm px-6 py-5">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">
+            Cisペプチド結合解析結果
+          </h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm text-gray-700">
+            <div>
+              <p className="text-xs text-gray-500">Cisペア数</p>
+              <p className="mt-1 font-medium text-purple-600 text-lg">
+                {result.cis_info.cis_num}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">平均Cis距離</p>
+              <p className="mt-1 font-mono">
+                {result.cis_info.cis_dist_mean.toFixed(2)} Å
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">Cis距離標準偏差</p>
+              <p className="mt-1 font-mono">
+                {result.cis_info.cis_dist_std.toFixed(2)} Å
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">平均Cisスコア</p>
+              <p className="mt-1 font-mono">
+                {result.cis_info.cis_score_mean.toFixed(2)}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">Mix (Cis/Trans混在)</p>
+              <p className="mt-1 font-medium text-orange-600">
+                {result.cis_info.mix}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">閾値</p>
+              <p className="mt-1 font-mono">
+                {result.cis_info.threshold.toFixed(1)} Å
+              </p>
+            </div>
+            {result.cis_info.cis_pairs &&
+              result.cis_info.cis_pairs.length > 0 && (
+                <div className="col-span-2 md:col-span-4">
+                  <p className="text-xs text-gray-500 mb-2">
+                    Cisペアリスト（最初の20個）
+                  </p>
+                  <p className="text-xs font-mono text-gray-600 break-words">
+                    {result.cis_info.cis_pairs.slice(0, 20).join(", ")}
+                    {result.cis_info.cis_pairs.length > 20 &&
+                      ` ... (他${result.cis_info.cis_pairs.length - 20}個)`}
+                  </p>
+                </div>
+              )}
+          </div>
+        </section>
+      )}
 
       {/* 3D ビューア */}
       <section className="bg-white border rounded-xl shadow-sm px-6 py-5">

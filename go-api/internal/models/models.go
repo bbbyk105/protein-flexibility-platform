@@ -2,13 +2,17 @@ package models
 
 import "time"
 
-// AnalysisParams は解析リクエストのパラメータ
+// AnalysisParams は解析リクエストのパラメータ（Notebook DSA対応）
 type AnalysisParams struct {
-	UniProtID     string  `json:"uniprot_id" binding:"required"`
-	MaxStructures int     `json:"max_structures"`
-	SeqRatio      float64 `json:"seq_ratio"`
-	CisThreshold  float64 `json:"cis_threshold"`
-	Method        string  `json:"method"`
+	UniProtIDs    string   `json:"uniprot_ids" binding:"required"`    // 複数対応（カンマまたはスペース区切り）
+	Method        *string  `json:"method,omitempty"`                 // "X-ray", "NMR", "EM" (デフォルト: "X-ray")
+	SeqRatio      *float64 `json:"seq_ratio,omitempty"`              // 0.0-1.0 (デフォルト: 0.2)
+	NegativePDBID *string  `json:"negative_pdbid,omitempty"`         // 除外するPDB ID（スペースまたはカンマ区切り）
+	CisThreshold  *float64 `json:"cis_threshold,omitempty"`          // cis判定の距離閾値 (デフォルト: 3.3)
+	Export        *bool    `json:"export,omitempty"`                 // CSV出力するか (デフォルト: true)
+	Heatmap       *bool    `json:"heatmap,omitempty"`                // ヒートマップを生成するか (デフォルト: true)
+	ProcCis       *bool    `json:"proc_cis,omitempty"`               // cis解析を行うか (デフォルト: true)
+	Overwrite     *bool    `json:"overwrite,omitempty"`              // 上書きするか (デフォルト: true)
 }
 
 // JobResponse はジョブ作成時のレスポンス
@@ -38,6 +42,12 @@ type NotebookDSAResult struct {
 	ExcludedPDBs  []string `json:"excluded_pdbs"`
 	SeqRatio      float64  `json:"seq_ratio"`
 	Method        string   `json:"method"`
+	
+	// 追加メタデータ
+	FullSequenceLength      int      `json:"full_sequence_length"`
+	ResidueCoveragePercent  float64  `json:"residue_coverage_percent"`
+	NumChains               int      `json:"num_chains"`
+	Top5ResolutionMean      *float64 `json:"top5_resolution_mean"` // null 可能
 
 	// グローバル指標
 	UMF           float64 `json:"umf"`
@@ -77,8 +87,8 @@ type PerResidueScore struct {
 
 // Heatmap はN×N行列
 type Heatmap struct {
-	Size   int         `json:"size"`
-	Values [][]float64 `json:"values"` // NaN を含む
+	Size   int            `json:"size"`
+	Values [][]*float64    `json:"values"` // NaN は null として表現（*float64 の nil）
 }
 
 // CisInfo はCisペプチド結合の統計情報

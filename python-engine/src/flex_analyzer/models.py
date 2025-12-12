@@ -58,6 +58,12 @@ class NotebookDSAResult(BaseModel):
     )
     seq_ratio: float = Field(..., description="Sequence alignment ratio threshold")
     method: str = Field(..., description="PDB method filter (e.g., 'X-ray diffraction')")
+    
+    # 追加メタデータ
+    full_sequence_length: int = Field(..., description="Full UniProt sequence length")
+    residue_coverage_percent: float = Field(..., description="Percentage of full sequence covered by residues")
+    num_chains: int = Field(..., description="Number of chains used in analysis")
+    top5_resolution_mean: Optional[float] = Field(None, description="Mean resolution of top 5 PDB structures (Å)")
 
     # グローバル指標
     umf: float = Field(..., description="UMF: mean of all pair scores")

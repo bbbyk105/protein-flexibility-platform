@@ -14,7 +14,7 @@ from ..models import NotebookDSAResult, PairScore, PerResidueScore, Heatmap, Cis
 from ..uniprot_data import UniprotData, convert_three
 from ..cif_data import CifData
 from ..sequence import sort_sequence, getcoord
-from ..distance import getdistance2_fast
+from ..distance import getdistance2
 from ..score import getscore, compute_umf, compute_pair_statistics
 from ..cis import detect_cis_pairs
 from ..heatmap import generate_heatmap, heatmap_to_list, save_heatmap_png
@@ -25,7 +25,17 @@ def save_distance_score_plot(score_df: pd.DataFrame, output_dir: Path, title: st
     """
     Cα–Cα distance (x) vs DSA score (y) の散布図を PNG で保存する。
     output_dir/distance_score.png に保存。
+
+    改善版:
+    - より見やすいプロット（サイズ、色、グリッド）
+    - 外れ値の自動クリップ
+    - 統計情報の表示
     """
+    import matplotlib
+
+    matplotlib.use("Agg")  # GUI なし環境対応
+    import matplotlib.pyplot as plt
+
     # 必要なカラムだけ取り出し
     df = score_df.copy()
 
@@ -34,32 +44,92 @@ def save_distance_score_plot(score_df: pd.DataFrame, output_dir: Path, title: st
     df = df.dropna(subset=["distance mean", "score"])
 
     if df.empty:
+        print(f"[save_distance_score_plot] WARNING: 有効なデータがありません")
         return  # データ無ければ何もしない
 
     distances = df["distance mean"].to_numpy()
     scores = df["score"].to_numpy()
 
-    # スコアの異常にデカい外れ値を少しカット（例: 上位 99.5% でクリップ）
+    # 外れ値のクリップ（1%と99%パーセンタイル）
     try:
-        cutoff = float(np.nanpercentile(scores, 99.5))
-        mask = scores <= cutoff
+        score_min = float(np.nanpercentile(scores, 1))
+        score_max = float(np.nanpercentile(scores, 99))
+        dist_min = float(np.nanpercentile(distances, 1))
+        dist_max = float(np.nanpercentile(distances, 99))
+
+        mask = (
+            (scores >= score_min)
+            & (scores <= score_max)
+            & (distances >= dist_min)
+            & (distances <= dist_max)
+        )
         distances = distances[mask]
         scores = scores[mask]
     except Exception:
         # 何かあっても、とりあえずそのまま描く
         pass
 
-    png_path = output_dir / "distance_score.png"
+    if len(distances) == 0:
+        print(f"[save_distance_score_plot] WARNING: クリップ後データがありません")
+        return  # クリップ後データが無ければ何もしない
 
-    plt.figure(figsize=(6, 4))
-    plt.scatter(distances, scores, s=4, alpha=0.4)
-    plt.xlabel("Cα–Cα distance (Å)")
-    plt.ylabel("DSA score (mean / std)")
-    plt.title(f"{title} – Distance vs Score")
-    plt.grid(True, alpha=0.2)
+    png_path = output_dir / "distance_score.png"
+    output_dir.mkdir(parents=True, exist_ok=True)  # ディレクトリが存在することを確認
+
+    # より見やすいプロット設定
+    fig, ax = plt.subplots(figsize=(10, 7), dpi=300)
+
+    # 散布図の作成（色とサイズを改善）
+    scatter = ax.scatter(
+        distances,
+        scores,
+        s=8,  # ポイントサイズを少し大きく
+        alpha=0.6,  # 透明度を調整
+        c=scores,  # スコアに応じた色付け
+        cmap="viridis",  # カラーマップ
+        edgecolors="none",
+        linewidths=0.5,
+    )
+
+    # 軸ラベルとタイトル
+    ax.set_xlabel("Cα–Cα distance (Å)", fontsize=13, fontweight="bold")
+    ax.set_ylabel("DSA score (mean / std)", fontsize=13, fontweight="bold")
+    ax.set_title(f"{title} – Distance vs Score", fontsize=15, fontweight="bold", pad=15)
+
+    # グリッドの改善
+    ax.grid(True, alpha=0.3, linestyle="--", linewidth=0.8)
+    ax.set_axisbelow(True)
+
+    # カラーバーの追加
+    cbar = fig.colorbar(scatter, ax=ax, pad=0.02)
+    cbar.set_label("Score", fontsize=11, fontweight="bold")
+
+    # 統計情報をテキストで表示
+    mean_score = np.nanmean(scores)
+    std_score = np.nanstd(scores)
+    mean_dist = np.nanmean(distances)
+
+    stats_text = f"Mean score: {mean_score:.2f} ± {std_score:.2f}\nMean distance: {mean_dist:.2f} Å"
+    ax.text(
+        0.02,
+        0.98,
+        stats_text,
+        transform=ax.transAxes,
+        fontsize=10,
+        verticalalignment="top",
+        bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.8),
+        family="monospace",
+    )
+
     plt.tight_layout()
-    plt.savefig(png_path, dpi=300)
-    plt.close()
+    try:
+        plt.savefig(png_path, dpi=300, bbox_inches="tight")
+        print(f"[save_distance_score_plot] SUCCESS: Saved to {png_path}")
+    except Exception as e:
+        print(f"[save_distance_score_plot] ERROR: Failed to save PNG: {e}")
+        raise
+    finally:
+        plt.close(fig)
 
 
 def run_dsa_pipeline(
@@ -246,7 +316,7 @@ def run_dsa_pipeline(
     if verbose:
         print("\n[Step 6] Computing distances...")
 
-    distance = getdistance2_fast(atomcoord)
+    distance = getdistance2(atomcoord)
 
     if verbose:
         print(f"  Computed {len(distance)} residue pairs")
@@ -264,7 +334,7 @@ def run_dsa_pipeline(
         print(f"  Pair score mean: {pair_score_mean:.4f}")
         print(f"  Pair score std: {pair_score_std:.4f}")
 
-        # ★ Distance–Score プロット PNG の保存 ★
+    # ★ Distance–Score プロット PNG の保存 ★
     # heatmap_png_path が指定されている場合 → そのディレクトリに distance_score.png を出す
     # （= 今の go-api/storage/<jobId>/heatmap.png と同じ場所）
     if heatmap_png_path is not None:
@@ -273,11 +343,17 @@ def run_dsa_pipeline(
         # それ以外は従来通り output_dir に保存
         plot_dir = output_dir
 
+    if verbose:
+        print(f"\n[Step 7.5] Saving distance-score plot...")
+
     save_distance_score_plot(
         score_df=score,
         output_dir=plot_dir,
         title=uniprot_id,
     )
+
+    if verbose:
+        print(f"  Distance-Score plot saved: {plot_dir / 'distance_score.png'}")
 
     # Step 8: Cis 検出
     if verbose:

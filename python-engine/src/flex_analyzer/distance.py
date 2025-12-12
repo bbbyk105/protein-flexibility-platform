@@ -35,49 +35,150 @@ def calculat(atom1: np.ndarray, atom2: np.ndarray) -> float:
 
 def getdistance2(atomcoord: pd.DataFrame) -> pd.DataFrame:
     """
-    全残基ペア (i, j) の距離を計算（Notebook の行 601-620 を再現）
+    全残基ペア (i, j) の距離を計算（Notebook DSA_Cis_250317.py 完全準拠）
+
+    Notebook の getdistance2 関数（行 601-620）を完全再現。
+
+    atomcoord の列構造（getcoord の出力）:
+        - 列0: UniProt 配列（列名: UniProt ID）
+        - 列1以降: 4 列ブロックの繰り返し
+            [label, x, y, z, label, x, y, z, ...]
+        
+        ★重要な仕様:
+            - label 列の位置: 1, 5, 9, 13, ... (4k+1)
+            - x 列の位置: 2, 6, 10, 14, ... (4k+2)
+            - y 列の位置: 3, 7, 11, 15, ... (4k+3)
+            - z 列の位置: 4, 8, 12, 16, ... (4k+4)
 
     Args:
-        atomcoord: 座標 DataFrame
-            - 列0: UniProt ID (残基名)
-            - 列1〜: [PDB Chain, x, y, z, PDB Chain, x, y, z, ...]
+        atomcoord: getcoord の出力 DataFrame
 
     Returns:
         distance DataFrame:
             - 列0: UniProt ID のペア "i+1, j+1" (1-based)
             - 列1: "residue pair" (残基名ペア)
-            - 列2〜: 各 PDB Chain の距離値
-    """
-    uniprot_id = atomcoord.iloc[:, 0].name  # UniProt ID (列名)
-    N = len(atomcoord)
+            - 列2以降: 各 PDB/Chain の距離値
+                列名は PDB/Chain 名（例: "1A00 A"）
 
-    # すべての残基インデックスペア (i < j)
+    例:
+        入力 atomcoord:
+        | P69905 | 1A00 A | 1.2 | 2.3 | 3.4 | 1A01 A | 1.1 | 2.2 | 3.3 |
+        | ALA    | 1A00 A | ... | ... | ... | 1A01 A | ... | ... | ... |
+        | VAL    | 1A00 A | ... | ... | ... | 1A01 A | ... | ... | ... |
+
+        出力 distance:
+        | P69905  | residue pair | 1A00 A  | 1A01 A  |
+        | 1, 2    | ALA, VAL     | 3.85    | 3.92    |
+        | 1, 3    | ALA, LEU     | 7.21    | 7.18    |
+    """
+    # ========================================================================
+    # Step 1: 基本情報の取得
+    # ========================================================================
+    uniprot_col_name = atomcoord.columns[0]
+    N = len(atomcoord)  # 残基数
+
+    # 全残基ペア (i < j) のインデックスを生成
     index_pairs = list(combinations(range(N), 2))
 
     # 残基名（NaN を "NA" に置換して文字列化）
     residues = atomcoord.iloc[:, 0].fillna("NA").astype(str)
 
-    # 距離用の列名: PDB/Chain 名は 4列おきに入っている想定 (PDB, x, y, z)
-    cols = atomcoord.iloc[:, 1::4].columns.tolist()
+    # ========================================================================
+    # Step 2: PDB/Chain 列名を取得（位置ベース）
+    # ========================================================================
+    # Notebook の実装:
+    #   cols = atomcoord.columns.values.tolist()[1::4]
+    # つまり、1, 5, 9, 13, ... 列目がラベル列
+    
+    cols = []
+    num_structures = (len(atomcoord.columns) - 1) // 4  # UniProt 列を除いた 4 列ブロック数
+    
+    for i in range(num_structures):
+        label_col_idx = 1 + (i * 4)  # 1, 5, 9, 13, ...
+        
+        if label_col_idx < len(atomcoord.columns):
+            # ラベル列の値から列名を取得（全行同じ値なので最初の行を使用）
+            label_value = atomcoord.iloc[0, label_col_idx]
+            # 列名として使用（文字列化）
+            col_name = str(label_value) if pd.notna(label_value) else f"Structure_{i+1}"
+            cols.append(col_name)
+        else:
+            print(
+                f"[getdistance2] WARNING: 想定される列インデックス {label_col_idx} "
+                f"が範囲外です（総列数: {len(atomcoord.columns)}）"
+            )
 
+    if not cols:
+        raise RuntimeError(
+            "getdistance2: PDB/Chain 列が見つかりません。\n"
+            f"atomcoord.columns = {list(atomcoord.columns)}\n"
+            f"列数 = {len(atomcoord.columns)}"
+        )
+
+    print(f"[getdistance2] INFO: {len(cols)} 構造の距離を計算します")
+    print(f"[getdistance2] DEBUG: PDB/Chain 列名 = {cols}")
+
+    # ========================================================================
+    # Step 3: distance DataFrame の骨格を作成
+    # ========================================================================
     distance = pd.DataFrame(
         {
             # 残基番号ペア (1-based)
-            uniprot_id: [f"{i + 1}, {j + 1}" for i, j in index_pairs],
-            # 残基名ペア (全部 str にしてから連結する)
+            uniprot_col_name: [f"{i + 1}, {j + 1}" for i, j in index_pairs],
+            # 残基名ペア
             "residue pair": [f"{residues.iloc[i]}, {residues.iloc[j]}" for i, j in index_pairs],
-            # 各 PDB/Chain 距離列を NaN で初期化
-            **{col: np.nan for col in cols},
         }
     )
 
-    # 各 PDB Chain ごとに距離を計算
-    for i, col in enumerate(cols):
-        col_index = (i * 4) + 2  # x, y, z の開始位置
-        atoms = atomcoord.iloc[:, col_index : col_index + 3].to_numpy()
+    # ========================================================================
+    # Step 4: 各 PDB/Chain ごとに距離を計算
+    # ========================================================================
+    for idx, col in enumerate(cols):
+        # このラベル列の位置
+        label_col_idx = 1 + (idx * 4)  # 1, 5, 9, 13, ...
+        
+        # x, y, z 列の位置
+        x_col_idx = label_col_idx + 1  # 2, 6, 10, 14, ...
+        y_col_idx = label_col_idx + 2  # 3, 7, 11, 15, ...
+        z_col_idx = label_col_idx + 3  # 4, 8, 12, 16, ...
+        
+        # 列インデックスの範囲チェック
+        if z_col_idx >= len(atomcoord.columns):
+            print(
+                f"[getdistance2] WARNING: {col} の座標列が不足 "
+                f"(z_col_idx={z_col_idx}, 総列数={len(atomcoord.columns)})"
+            )
+            # NaN で埋める
+            distance[col] = np.nan
+            continue
+        
+        # x, y, z を抽出（位置ベース）
+        atoms = atomcoord.iloc[:, x_col_idx:z_col_idx + 1].to_numpy()
+        
+        # 3列であることを確認
+        if atoms.shape[1] != 3:
+            print(
+                f"[getdistance2] WARNING: {col} の座標が 3 列ではありません "
+                f"(shape={atoms.shape})"
+            )
+            distance[col] = np.nan
+            continue
+        
+        # ベクトル化距離計算
+        try:
+            distances = calculat_vectorized(atoms)
+            distance[col] = distances
+        except Exception as e:
+            print(f"[getdistance2] WARNING: {col} の距離計算でエラー: {e}")
+            distance[col] = np.nan
+            continue
 
-        # 全ペアの距離を計算
-        distance[col] = [calculat(atoms[i_idx], atoms[j_idx]) for i_idx, j_idx in index_pairs]
+    # ========================================================================
+    # Step 5: 結果の検証
+    # ========================================================================
+    print(f"[getdistance2] SUCCESS: {len(distance)} ペアの距離を計算しました")
+    print(f"[getdistance2] DEBUG: distance.shape = {distance.shape}")
+    print(f"[getdistance2] DEBUG: distance.columns[:5] = {list(distance.columns[:5])}")
 
     return distance
 
@@ -106,38 +207,3 @@ def calculat_vectorized(atoms: np.ndarray) -> np.ndarray:
     return dists[iu]
 
 
-def getdistance2_fast(atomcoord: pd.DataFrame) -> pd.DataFrame:
-    """
-    getdistance2 のベクトル化版（高速化）
-
-    ループの代わりに NumPy のベクトル演算を使用
-    """
-    uniprot_id = atomcoord.iloc[:, 0].name
-    N = len(atomcoord)
-
-    # インデックスペア (i < j)
-    index_pairs = list(combinations(range(N), 2))
-
-    # 残基名（NaN を "NA" に置換して文字列化）
-    residues = atomcoord.iloc[:, 0].fillna("NA").astype(str)
-
-    # PDB/Chain 列 (4列おき)
-    cols = atomcoord.iloc[:, 1::4].columns.tolist()
-
-    # ベースとなる距離テーブルを作成
-    distance = pd.DataFrame(
-        {
-            # 残基番号ペア (1-based)
-            uniprot_id: [f"{i + 1}, {j + 1}" for i, j in index_pairs],
-            # 残基名ペア（すべて str なので TypeError を起こさない）
-            "residue pair": [f"{residues.iloc[i]}, {residues.iloc[j]}" for i, j in index_pairs],
-        }
-    )
-
-    # 各 PDB Chain ごとにベクトル化計算
-    for i, col in enumerate(cols):
-        col_index = (i * 4) + 2
-        atoms = atomcoord.iloc[:, col_index : col_index + 3].to_numpy()
-        distance[col] = calculat_vectorized(atoms)
-
-    return distance

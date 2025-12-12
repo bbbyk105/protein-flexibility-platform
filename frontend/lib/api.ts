@@ -14,29 +14,56 @@ const API_BASE_URL =
 async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
     let message = `Request failed with status ${res.status}`;
+    let errorData: any = null;
     try {
-      const data = (await res.json()) as Partial<ErrorResponse>;
-      if (data.error) {
-        message = data.error;
+      const text = await res.text();
+      console.log("[DEBUG] handleResponse - Error response text:", text);
+      errorData = JSON.parse(text) as Partial<ErrorResponse>;
+      if (errorData.error) {
+        message = errorData.error;
       }
-    } catch {
+      console.log("[DEBUG] handleResponse - Error data:", errorData);
+    } catch (e) {
+      console.log(
+        "[DEBUG] handleResponse - Failed to parse error response:",
+        e
+      );
       // ignore json parse error
     }
+    console.error("[DEBUG] handleResponse - Throwing error:", message);
     throw new Error(message);
   }
-  return (await res.json()) as T;
+  const jsonData = await res.json();
+  console.log("[DEBUG] handleResponse - Success response:", jsonData);
+  return jsonData as T;
 }
 
 export async function createDSAJob(
   params: AnalysisParams
 ): Promise<JobResponse> {
+  // デバッグ: 送信するパラメータをログ出力
+  console.log(
+    "[DEBUG] createDSAJob - Sending params:",
+    JSON.stringify(params, null, 2)
+  );
+  console.log(
+    "[DEBUG] createDSAJob - API URL:",
+    `${API_BASE_URL}/api/dsa/analyze`
+  );
+
+  const requestBody = JSON.stringify(params);
+  console.log("[DEBUG] createDSAJob - Request body:", requestBody);
+
   const res = await fetch(`${API_BASE_URL}/api/dsa/analyze`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(params),
+    body: requestBody,
   });
+
+  console.log("[DEBUG] createDSAJob - Response status:", res.status);
+  console.log("[DEBUG] createDSAJob - Response ok:", res.ok);
 
   return handleResponse<JobResponse>(res);
 }

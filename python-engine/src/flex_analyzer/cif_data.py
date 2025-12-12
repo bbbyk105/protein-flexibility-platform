@@ -255,29 +255,33 @@ class CifData:
 
         return "substitution"
 
-    def getsequence(self, uniprotids: List[str]) -> List:
+    def getsequence(self, uniprotids: List[str]) -> pd.DataFrame:
         """
-        配列情報の取得
+        配列情報の取得（Notebook完全再現版）
 
-        Notebook の行 347-406 を再現
+        Notebook の行 347-406 を完全再現
+        複数チェーンがある場合もDataFrameで返す
 
         Args:
             uniprotids: UniProt ID のリスト
 
         Returns:
-            chain リスト（pdb_mon_id + ", " + pdb_seq_num の形式）
+            DataFrame: 各チェーンごとの列を持つDataFrame
+                列名: "pdbid chain" 形式（例: "1A00 A", "1A00 B"）
         """
         firstLoop = True
         struct = self.struct_ref_seq[
             self.struct_ref_seq["accession"].isin(uniprotids)
         ].drop_duplicates(subset=["strand_id"])
 
+        sequence = None
+
         for row in struct.itertuples():
             if row.accession in uniprotids:
                 sort_index = int(row.sort_index)
                 align_beg = sort_index + int(row.seq_align_beg) - 1
                 align_end = sort_index + int(row.seq_align_end)
-                chain = self.chain[align_beg:align_end]
+                chain = self.chain[align_beg:align_end].copy()  # コピーを作成
 
                 # 変異情報の処理
                 mutat_info = self.struct_ref_seq_dif[
@@ -347,6 +351,16 @@ class CifData:
                                         m -= 1
                                         break
 
-                return chain
+                # Notebookコード: firstLoopでDataFrameを作成し、後続のチェーンを追加
+                if firstLoop:
+                    firstLoop = False
+                    sequence = pd.DataFrame(chain, columns=[f"{self.pdbid} {row.strand_id}"])
+                else:
+                    strand = pd.Series(chain, name=f"{self.pdbid} {row.strand_id}")
+                    sequence = pd.concat([sequence, strand], axis=1)
 
-        return []
+        if firstLoop:
+            # チェーンが見つからなかった場合
+            sequence = pd.DataFrame()
+
+        return sequence

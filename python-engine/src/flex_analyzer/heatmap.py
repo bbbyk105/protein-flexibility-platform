@@ -46,14 +46,14 @@ def heatmap_to_list(heatmap: np.ndarray) -> List[List[Optional[float]]]:
 def save_heatmap_png(
     heatmap: np.ndarray,
     out_path: Path,
-    vmin: float = 20.0,
-    vmax: float = 130.0,
+    vmin: Optional[float] = None,
+    vmax: Optional[float] = None,
     title: Optional[str] = None,
 ) -> None:
     """
     ヒートマップ配列から PNG を保存するヘルパー
 
-    - 20〜130 をクリップ（スライド仕様）
+    - vmin/vmaxが指定されていない場合、データから自動計算
     - NaN は白抜き
     """
     import matplotlib.pyplot as plt  # 遅延 import
@@ -61,25 +61,42 @@ def save_heatmap_png(
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
+    # 有効な値（NaNでない値）を取得
+    valid_values = heatmap[~np.isnan(heatmap)]
+
+    if len(valid_values) == 0:
+        # データがない場合はデフォルト値を使用
+        if vmin is None:
+            vmin = 0.0
+        if vmax is None:
+            vmax = 100.0
+    else:
+        # 自動調整: 1%と99%パーセンタイルを使用して外れ値を除外
+        if vmin is None:
+            vmin = float(np.nanpercentile(valid_values, 1))
+        if vmax is None:
+            vmax = float(np.nanpercentile(valid_values, 99))
+
     hm_vis = np.where(np.isnan(heatmap), np.nan, np.clip(heatmap, vmin, vmax))
 
-    fig, ax = plt.subplots(figsize=(4, 4), dpi=300)
+    fig, ax = plt.subplots(figsize=(8, 8), dpi=300)
     im = ax.imshow(
         hm_vis,
         vmin=vmin,
         vmax=vmax,
         cmap="rainbow_r",  # Notebook と同じ
         origin="lower",
+        aspect="auto",
     )
     ax.set_xticks([])
     ax.set_yticks([])
 
     if title:
-        ax.set_title(title)
+        ax.set_title(title, fontsize=14, fontweight="bold", pad=10)
 
     cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
-    cbar.set_label("Score")
+    cbar.set_label("Score", fontsize=12)
 
     fig.tight_layout()
-    fig.savefig(out_path, bbox_inches="tight", transparent=True)
+    fig.savefig(out_path, bbox_inches="tight", transparent=True, dpi=300)
     plt.close(fig)

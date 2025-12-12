@@ -1,11 +1,15 @@
 // frontend/types/dsa.ts
 
 export interface AnalysisParams {
-  uniprot_id: string;
-  max_structures?: number;
-  seq_ratio?: number;
-  cis_threshold?: number;
-  method?: string; // "X-ray diffraction" など
+  uniprot_ids: string; // 複数対応（カンマまたはスペース区切り）
+  method?: string; // "X-ray", "NMR", "EM"
+  seq_ratio?: number; // 0.0-1.0
+  negative_pdbid?: string; // 除外するPDB ID（スペースまたはカンマ区切り）
+  cis_threshold?: number; // cis判定の距離閾値
+  export?: boolean; // CSV出力するか
+  heatmap?: boolean; // ヒートマップを生成するか
+  proc_cis?: boolean; // cis解析を行うか
+  overwrite?: boolean; // 上書きするか
 }
 
 export interface JobResponse {
@@ -65,6 +69,12 @@ export interface NotebookDSAResult {
   excluded_pdbs: string[];
   seq_ratio: number;
   method: string;
+
+  // 追加メタデータ
+  full_sequence_length: number;
+  residue_coverage_percent: number;
+  num_chains: number;
+  top5_resolution_mean: number | null;
 
   // グローバル指標
   umf: number;
