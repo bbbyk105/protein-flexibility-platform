@@ -10,7 +10,6 @@ import (
 	"github.com/yourusername/flex-api/internal/services"
 )
 
-
 type Handler struct {
 	jobService *services.JobService
 }
@@ -110,4 +109,27 @@ func (h *Handler) GetHeatmap(c *gin.Context) {
 	}
 
 	c.File(heatmapPath)
+}
+
+// GetDistanceScore は distance–score プロット PNG を返す
+// GET /api/dsa/jobs/:job_id/distance-score
+func (h *Handler) GetDistanceScore(c *gin.Context) {
+	jobID := c.Param("job_id")
+	if jobID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "job_id is required"})
+		return
+	}
+
+	pngPath := filepath.Join(h.jobService.StorageDir(), jobID, "distance_score.png")
+
+	if _, err := os.Stat(pngPath); err != nil {
+		if os.IsNotExist(err) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "distance_score.png not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to stat distance_score.png"})
+		return
+	}
+
+	c.File(pngPath)
 }

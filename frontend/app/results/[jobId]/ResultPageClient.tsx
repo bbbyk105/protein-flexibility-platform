@@ -2,8 +2,6 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-
-import Heatmap from "@/components/visualization/Heatmap";
 import MolstarViewer from "@/components/visualization/MolstarViewer";
 
 import type {
@@ -13,6 +11,7 @@ import type {
 } from "@/types/dsa";
 import type { ResidueData } from "@/types";
 import { HeatmapImage } from "@/components/visualization/HeatmapImage";
+import { DistanceScorePlot } from "@/components/visualization/DistanceScorePlot";
 
 interface ResultPageClientProps {
   jobId: string;
@@ -259,6 +258,11 @@ export default function ResultPageClient({ jobId }: ResultPageClientProps) {
         ) : (
           <HeatmapImage jobId={jobId} />
         )}
+      </section>
+      <section className="bg-white border rounded-xl shadow-sm px-6 py-5">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">Plot</h2>
+
+        <DistanceScorePlot jobId={jobId} />
       </section>
     </main>
   );

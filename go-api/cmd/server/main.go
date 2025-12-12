@@ -49,6 +49,7 @@ func main() {
 		api.GET("/status/:job_id", h.GetStatus)
 		api.GET("/result/:job_id", h.GetResult)
 		api.GET("/jobs/:job_id/heatmap", h.GetHeatmap)
+		api.GET("/jobs/:job_id/distance-score", h.GetDistanceScore)
 	}
 
 	// サーバー起動
@@ -56,7 +57,7 @@ func main() {
 	log.Printf("Server starting on %s", addr)
 	log.Printf("Storage directory: %s", *storageDir)
 	log.Printf("Python binary: %s", *pythonBin)
-	
+
 	if err := router.Run(addr); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}

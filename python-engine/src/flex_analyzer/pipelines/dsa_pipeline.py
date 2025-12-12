@@ -8,6 +8,7 @@ from typing import List, Optional
 
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 
 from ..models import NotebookDSAResult, PairScore, PerResidueScore, Heatmap, CisInfo
 from ..uniprot_data import UniprotData, convert_three
@@ -18,6 +19,47 @@ from ..score import getscore, compute_umf, compute_pair_statistics
 from ..cis import detect_cis_pairs
 from ..heatmap import generate_heatmap, heatmap_to_list, save_heatmap_png
 from ..per_residue import per_residue_scores_fast
+
+
+def save_distance_score_plot(score_df: pd.DataFrame, output_dir: Path, title: str) -> None:
+    """
+    Cα–Cα distance (x) vs DSA score (y) の散布図を PNG で保存する。
+    output_dir/distance_score.png に保存。
+    """
+    # 必要なカラムだけ取り出し
+    df = score_df.copy()
+
+    # 無限大/NaN は落とす
+    df = df.replace([np.inf, -np.inf], np.nan)
+    df = df.dropna(subset=["distance mean", "score"])
+
+    if df.empty:
+        return  # データ無ければ何もしない
+
+    distances = df["distance mean"].to_numpy()
+    scores = df["score"].to_numpy()
+
+    # スコアの異常にデカい外れ値を少しカット（例: 上位 99.5% でクリップ）
+    try:
+        cutoff = float(np.nanpercentile(scores, 99.5))
+        mask = scores <= cutoff
+        distances = distances[mask]
+        scores = scores[mask]
+    except Exception:
+        # 何かあっても、とりあえずそのまま描く
+        pass
+
+    png_path = output_dir / "distance_score.png"
+
+    plt.figure(figsize=(6, 4))
+    plt.scatter(distances, scores, s=4, alpha=0.4)
+    plt.xlabel("Cα–Cα distance (Å)")
+    plt.ylabel("DSA score (mean / std)")
+    plt.title(f"{title} – Distance vs Score")
+    plt.grid(True, alpha=0.2)
+    plt.tight_layout()
+    plt.savefig(png_path, dpi=300)
+    plt.close()
 
 
 def run_dsa_pipeline(
@@ -221,6 +263,21 @@ def run_dsa_pipeline(
         print(f"  UMF: {umf:.4f}")
         print(f"  Pair score mean: {pair_score_mean:.4f}")
         print(f"  Pair score std: {pair_score_std:.4f}")
+
+        # ★ Distance–Score プロット PNG の保存 ★
+    # heatmap_png_path が指定されている場合 → そのディレクトリに distance_score.png を出す
+    # （= 今の go-api/storage/<jobId>/heatmap.png と同じ場所）
+    if heatmap_png_path is not None:
+        plot_dir = Path(heatmap_png_path).parent
+    else:
+        # それ以外は従来通り output_dir に保存
+        plot_dir = output_dir
+
+    save_distance_score_plot(
+        score_df=score,
+        output_dir=plot_dir,
+        title=uniprot_id,
+    )
 
     # Step 8: Cis 検出
     if verbose:
