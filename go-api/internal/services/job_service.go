@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -39,7 +40,62 @@ func (s *JobService) StorageDir() string {
 	return s.storageDir
 }
 
-// CreateJob は新しいジョブを作成
+// CreateJobs は複数のUniProt IDを分割してそれぞれ別のジョブとして作成
+func (s *JobService) CreateJobs(params models.AnalysisParams) (*models.JobsResponse, error) {
+	// UniProt IDを分割（カンマまたはスペース区切り）
+	ids := splitUniProtIDs(params.UniProtIDs)
+	
+	if len(ids) == 0 {
+		return nil, fmt.Errorf("no UniProt IDs provided")
+	}
+
+	var jobs []models.JobResponse
+	createdAt := time.Now()
+
+	// 各UniProt IDに対してジョブを作成
+	for _, uniprotID := range ids {
+		// パラメータをコピーして、単一のUniProt IDに設定
+		singleParams := params
+		singleParams.UniProtIDs = uniprotID
+
+		job, err := s.CreateJob(singleParams)
+		if err != nil {
+			// エラーが発生した場合でも、作成済みのジョブは返す
+			fmt.Printf("[ERROR] CreateJobs - Failed to create job for %s: %v\n", uniprotID, err)
+			continue
+		}
+
+		jobs = append(jobs, *job)
+	}
+
+	if len(jobs) == 0 {
+		return nil, fmt.Errorf("failed to create any jobs")
+	}
+
+	return &models.JobsResponse{
+		Jobs:      jobs,
+		CreatedAt: createdAt,
+	}, nil
+}
+
+// splitUniProtIDs はUniProt ID文字列を分割（カンマまたはスペース区切り）
+func splitUniProtIDs(idsStr string) []string {
+	// カンマまたはスペースで分割
+	re := regexp.MustCompile(`[,\s]+`)
+	parts := re.Split(strings.TrimSpace(idsStr), -1)
+	
+	var result []string
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	
+	return result
+}
+
+// CreateJob は新しいジョブを作成（単一のUniProt ID用）
 func (s *JobService) CreateJob(params models.AnalysisParams) (*models.JobResponse, error) {
 	// デバッグ: 受け取ったパラメータをログ出力
 	fmt.Printf("[DEBUG] CreateJob - Received params:\n")

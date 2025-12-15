@@ -111,14 +111,15 @@ func (h *Handler) CreateAnalysis(c *gin.Context) {
 		log.Printf("  Overwrite: nil")
 	}
 
-	response, err := h.jobService.CreateJob(params)
+	// 複数のUniProt IDを分割してそれぞれ別のジョブとして作成
+	response, err := h.jobService.CreateJobs(params)
 	if err != nil {
-		log.Printf("[DEBUG] CreateAnalysis - CreateJob error: %v", err)
+		log.Printf("[DEBUG] CreateAnalysis - CreateJobs error: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	log.Printf("[DEBUG] CreateAnalysis - Job created successfully: %s", response.JobID)
+	log.Printf("[DEBUG] CreateAnalysis - Jobs created successfully: %d jobs", len(response.Jobs))
 	c.JSON(http.StatusOK, response)
 }
 

@@ -22,6 +22,12 @@ type JobResponse struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+// JobsResponse は複数ジョブ作成時のレスポンス
+type JobsResponse struct {
+	Jobs      []JobResponse `json:"jobs"`
+	CreatedAt time.Time     `json:"created_at"`
+}
+
 // JobStatus はジョブの状態を表す
 type JobStatus struct {
 	JobID     string    `json:"job_id"`

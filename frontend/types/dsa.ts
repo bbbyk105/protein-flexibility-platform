@@ -18,6 +18,11 @@ export interface JobResponse {
   created_at: string; // ISO string
 }
 
+export interface JobsResponse {
+  jobs: JobResponse[];
+  created_at: string; // ISO string
+}
+
 export interface JobStatus {
   job_id: string;
   status: "pending" | "processing" | "completed" | "failed";

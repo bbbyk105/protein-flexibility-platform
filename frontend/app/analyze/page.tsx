@@ -70,10 +70,16 @@ export default function AnalyzePage() {
         JSON.stringify(params, null, 2)
       );
 
-      const job = await createDSAJob(params);
+      const jobsResponse = await createDSAJob(params);
 
-      // /results/[jobId] に遷移
-      router.push(`/results/${job.job_id}`);
+      // 複数のジョブが作成された場合は比較ページに遷移、1つの場合は通常の結果ページに遷移
+      if (jobsResponse.jobs.length === 1) {
+        router.push(`/results/${jobsResponse.jobs[0].job_id}`);
+      } else {
+        // 複数のジョブIDをクエリパラメータで渡す
+        const jobIds = jobsResponse.jobs.map((j) => j.job_id).join(",");
+        router.push(`/compare?jobIds=${jobIds}`);
+      }
     } catch (err) {
       console.error(err);
       setError(

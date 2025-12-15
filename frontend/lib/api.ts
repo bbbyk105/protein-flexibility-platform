@@ -3,6 +3,7 @@
 import type {
   AnalysisParams,
   JobResponse,
+  JobsResponse,
   JobStatus,
   NotebookDSAResult,
   ErrorResponse,
@@ -40,7 +41,7 @@ async function handleResponse<T>(res: Response): Promise<T> {
 
 export async function createDSAJob(
   params: AnalysisParams
-): Promise<JobResponse> {
+): Promise<JobsResponse> {
   // デバッグ: 送信するパラメータをログ出力
   console.log(
     "[DEBUG] createDSAJob - Sending params:",
@@ -65,7 +66,7 @@ export async function createDSAJob(
   console.log("[DEBUG] createDSAJob - Response status:", res.status);
   console.log("[DEBUG] createDSAJob - Response ok:", res.ok);
 
-  return handleResponse<JobResponse>(res);
+  return handleResponse<JobsResponse>(res);
 }
 
 export async function fetchJobStatus(jobId: string): Promise<JobStatus> {
